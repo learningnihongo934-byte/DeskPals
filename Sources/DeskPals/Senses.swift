@@ -3,6 +3,7 @@ import AppKit
 enum Keys {
     static let pet = "pet", scale = "scale"
     static let windows = "react.windows", clicks = "react.clicks", typing = "react.typing", idle = "react.idle"
+    static let bubbles = "bubbles", sleepAfter = "sleepAfter", launchedBefore = "launchedBefore"
 }
 
 /// Watches the desktop and tells the pet what happened. Nothing here records what you do:
@@ -23,6 +24,12 @@ final class Senses {
     init(pet: Pet) { self.pet = pet }
 
     static func on(_ key: String) -> Bool { UserDefaults.standard.object(forKey: key) as? Bool ?? true }
+
+    /// Seconds of no input before a nap (daytime; nights are shorter).
+    static var sleepAfter: Double {
+        let s = UserDefaults.standard.double(forKey: Keys.sleepAfter)
+        return s > 0 ? s : 120
+    }
 
     func start() {
         let nc = NSWorkspace.shared.notificationCenter
@@ -93,7 +100,7 @@ final class Senses {
         }
         let hour = Calendar.current.component(.hour, from: Date())
         let night = hour >= 23 || hour < 5
-        let limit = (night ? 45 : 120) / pet.kind.sleepiness
+        let limit = Self.sleepAfter * (night ? 0.4 : 1) / pet.kind.sleepiness
         if pet.isAsleep {
             guard idle < 1 else { return }
             let away = sleptAt.map { Date().timeIntervalSince($0) + limit } ?? 0

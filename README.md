@@ -20,7 +20,11 @@ Pick one of four pets from the menu bar:
 - **Idle and time of day**: falls asleep when you step away, wakes up when you're back, says good morning, yawns late at night.
 - **You**: click it to pet it, drag it to pick it up, and fling it to throw it.
 
-Each reaction can be turned off in the menu bar under **Reacts to**.
+## Settings
+
+Open DeskPals again (from Finder, Spotlight or Launchpad) or choose **Settings…** in the menu bar to pick your pet,
+change its size, turn each reaction on or off, set how long you're idle before it naps, hide speech bubbles,
+and start DeskPals when you log in.
 
 Privacy: DeskPals only reads window positions, click positions and "a key was pressed recently".
 It never reads which keys you press, window titles or anything on screen, and it needs no permissions.
@@ -43,6 +47,8 @@ Needs macOS 13+ and Xcode or the Swift toolchain.
 - `Pet.swift`: physics, the behavior state machine and reactions
 - `Senses.swift`: watches windows, apps, clicks, typing and idle time
 - `PetWindow.swift`: the click-through window the pet is drawn in
+- `Settings.swift`: the Settings window and saved preferences
+- `Icon.swift`: draws the app icon (built into `AppIcon.icns` by `build.sh`)
 - `AppDelegate.swift`: menu bar and the 60 fps loop
 
 Made by **Virat Reddy Kaukuntla** ([@learningnihongo934-byte](https://github.com/learningnihongo934-byte))

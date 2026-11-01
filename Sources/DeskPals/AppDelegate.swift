@@ -2,6 +2,8 @@ import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private let world = World()
+    private let settings = SettingsModel()
+    private var settingsWindow: SettingsWindow?
     private var pet: Pet!
     private var window: PetWindow!
     private var senses: Senses!
@@ -10,21 +12,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var last = CACurrentMediaTime()
     private var worldClock = 0.0
 
-    private let sizes: [(String, CGFloat)] = [("Small", 3), ("Medium", 4), ("Large", 6)]
-    private let reactions: [(String, String)] = [("New windows & apps", Keys.windows), ("Mouse clicks", Keys.clicks),
-                                                 ("Typing", Keys.typing), ("Idle & time of day", Keys.idle)]
-
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let d = UserDefaults.standard
-        let kind = PetKind.all.first { $0.id == d.string(forKey: Keys.pet) } ?? PetKind.all[0]
-        let scale = d.double(forKey: Keys.scale)
-
         world.refresh()
-        pet = Pet(kind: kind, scale: scale > 0 ? scale : 4, world: world)
+        pet = Pet(kind: settings.kind, scale: CGFloat(settings.scale), world: world)
         pet.dropIn(atX: NSEvent.mouseLocation.x)
         window = PetWindow(pet: pet)
         senses = Senses(pet: pet)
         senses.start()
+
+        settings.onPet = { [weak self] k in self?.pet.setKind(k); self?.updateIcon() }
+        settings.onScale = { [weak self] s in self?.pet.scale = s }
+        settings.onCall = { [weak self] in self?.callHere() }
         buildMenu()
 
         NotificationCenter.default.addObserver(forName: NSApplication.didChangeScreenParametersNotification,
@@ -37,6 +35,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
+
+        if !UserDefaults.standard.bool(forKey: Keys.launchedBefore) {
+            UserDefaults.standard.set(true, forKey: Keys.launchedBefore)
+            showSettings()
+        }
+    }
+
+    /// Opening the app again while it runs (Finder, Spotlight, Launchpad) shows Settings.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        showSettings()
+        return false
     }
 
     private func tick() {
@@ -71,7 +80,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             item.tag = i
             item.target = self
             item.image = SpriteSheet.icon(for: k, points: 18)
-            item.state = k.id == pet.kind.id ? .on : .off
+            item.state = k.id == settings.petID ? .on : .off
             menu.addItem(item)
         }
         menu.addItem(.separator())
@@ -81,11 +90,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(call)
 
         let sizeMenu = NSMenu()
-        for (i, (name, s)) in sizes.enumerated() {
-            let item = NSMenuItem(title: name, action: #selector(chooseSize(_:)), keyEquivalent: "")
+        for (i, size) in SettingsModel.sizes.enumerated() {
+            let item = NSMenuItem(title: size.name, action: #selector(chooseSize(_:)), keyEquivalent: "")
             item.tag = i
             item.target = self
-            item.state = s == pet.scale ? .on : .off
+            item.state = size.scale == settings.scale ? .on : .off
             sizeMenu.addItem(item)
         }
         let sizeItem = NSMenuItem(title: "Size", action: nil, keyEquivalent: "")
@@ -93,11 +102,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(sizeItem)
 
         let reactMenu = NSMenu()
-        for (i, (name, key)) in reactions.enumerated() {
-            let item = NSMenuItem(title: name, action: #selector(toggleReaction(_:)), keyEquivalent: "")
+        for (i, r) in SettingsModel.reactions.enumerated() {
+            let item = NSMenuItem(title: r.name, action: #selector(toggleReaction(_:)), keyEquivalent: "")
             item.tag = i
             item.target = self
-            item.state = Senses.on(key) ? .on : .off
+            item.state = settings.reacts[r.key] ?? true ? .on : .off
             reactMenu.addItem(item)
         }
         let reactItem = NSMenuItem(title: "Reacts to", action: nil, keyEquivalent: "")
@@ -105,6 +114,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(reactItem)
 
         menu.addItem(.separator())
+        let prefs = NSMenuItem(title: "Settings…", action: #selector(showSettings), keyEquivalent: ",")
+        prefs.target = self
+        menu.addItem(prefs)
         menu.addItem(NSMenuItem(title: "Quit DeskPals", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
@@ -113,11 +125,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         status.button?.toolTip = "\(pet.kind.name) the \(pet.kind.species)"
     }
 
+    @objc private func showSettings() {
+        if settingsWindow == nil { settingsWindow = SettingsWindow(model: settings) }
+        settingsWindow?.show()
+    }
+
     @objc private func choosePet(_ sender: NSMenuItem) {
-        let k = PetKind.all[sender.tag]
-        UserDefaults.standard.set(k.id, forKey: Keys.pet)
-        pet.setKind(k)
-        updateIcon()
+        settings.petID = PetKind.all[sender.tag].id
     }
 
     @objc private func callHere() {
@@ -125,13 +139,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc private func chooseSize(_ sender: NSMenuItem) {
-        let s = sizes[sender.tag].1
-        UserDefaults.standard.set(Double(s), forKey: Keys.scale)
-        pet.scale = s
+        settings.scale = SettingsModel.sizes[sender.tag].scale
     }
 
     @objc private func toggleReaction(_ sender: NSMenuItem) {
-        let key = reactions[sender.tag].1
-        UserDefaults.standard.set(!Senses.on(key), forKey: key)
+        let key = SettingsModel.reactions[sender.tag].key
+        settings.reacts[key] = !(settings.reacts[key] ?? true)
     }
 }

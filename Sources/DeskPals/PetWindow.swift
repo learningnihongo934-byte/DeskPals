@@ -60,7 +60,7 @@ final class PetView: NSView {
         ctx.scaleBy(x: (l.flip ? -1 : 1) * l.sx, y: l.sy)
         ctx.draw(pet.sheet.image(l.pose, l.eyes), in: CGRect(x: -s / 2, y: 0, width: s, height: s))
         ctx.restoreGState()
-        if let text = pet.bubble { drawBubble(text, at: s * l.sy + l.lift * pet.scale + 4) }
+        if let text = pet.bubble, Senses.on(Keys.bubbles) { drawBubble(text, at: s * l.sy + l.lift * pet.scale + 4) }
     }
 
     private func drawBubble(_ text: String, at y: CGFloat) {

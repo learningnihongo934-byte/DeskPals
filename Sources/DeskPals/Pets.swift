@@ -13,6 +13,7 @@ struct PetKind {
     let name: String
     let species: String
     let sound: String
+    let trait: String
     let art: [String]
     let mirrored: Bool
     let legs: [Int]
@@ -28,7 +29,7 @@ struct PetKind {
     static let all: [PetKind] = [mochi, gloop, ember, pip]
 
     static let mochi = PetKind(
-        id: "mochi", name: "Mochi", species: "cat", sound: "mew!",
+        id: "mochi", name: "Mochi", species: "cat", sound: "mew!", trait: "Chases clicks, naps a lot",
         art: [
             "................",
             "....o.......o...",
@@ -51,7 +52,7 @@ struct PetKind {
         clickStyle: .chase, gravity: 1, hops: false)
 
     static let gloop = PetKind(
-        id: "gloop", name: "Gloop", species: "slime", sound: "blub",
+        id: "gloop", name: "Gloop", species: "slime", sound: "blub", trait: "Slow, bouncy, easily startled",
         art: [
             "................",
             "................",
@@ -76,7 +77,7 @@ struct PetKind {
         clickStyle: .startle, gravity: 1, hops: true)
 
     static let ember = PetKind(
-        id: "ember", name: "Ember", species: "fox", sound: "yip!",
+        id: "ember", name: "Ember", species: "fox", sound: "yip!", trait: "Fast and nosy about new windows",
         art: [
             "................",
             "..o.......o.....",
@@ -99,7 +100,7 @@ struct PetKind {
         clickStyle: .chase, gravity: 1, hops: false)
 
     static let pip = PetKind(
-        id: "pip", name: "Pip", species: "dragon", sound: "rawr!",
+        id: "pip", name: "Pip", species: "dragon", sound: "rawr!", trait: "Jumpy, glides instead of falling",
         art: [
             "................",
             ".....a.....a....",
