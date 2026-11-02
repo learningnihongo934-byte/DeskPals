@@ -124,6 +124,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         s.pet.progressStep = n
                         s.pet.progressClock = s.pet.kind.progressInterval - 1
                     }
+                case "noworld": self.env.clearWorld()
+                case "noplaces": self.noPlaces()
                 case "chase":
                     let ps = self.pets
                     if let prey = ps.first(where: { $0.kind.power == .vanish }), let hunter = ps.first(where: { $0.kind.id == prey.kind.rival }) {
@@ -223,6 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.hasPlace = { [weak self] p in self?.props.place(p) != nil }
         settings.onGame = { [weak self] g in self?.games.start(g) }
         settings.onPower = { [weak self] in self?.selected?.pet.powerMove() }
+        settings.onNoPlaces = { [weak self] in self?.noPlaces() }
     }
 
     private func tick() {
@@ -396,6 +399,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             it.image = SpriteSheet.icon(p.image(), points: 18)
             placeMenu.addItem(it)
         }
+        placeMenu.insertItem(.separator(), at: 0)
+        placeMenu.insertItem(item("None (put all away)", #selector(noPlaces)), at: 0)
         let placeItem = item("Places", nil)
         placeItem.submenu = placeMenu
         menu.addItem(placeItem)
@@ -409,6 +414,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             worldMenu.addItem(it)
         }
         worldMenu.addItem(.separator())
+        let off = item("Weather: off", #selector(weatherOff))
+        off.state = env.mode == .off && env.override == nil ? .on : .off
+        worldMenu.addItem(off)
         let auto = item("Weather: automatic", #selector(weatherItem(_:)), tag: -1)
         auto.state = env.override == nil ? .on : .off
         worldMenu.addItem(auto)
@@ -470,7 +478,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func stopGame() { games.stop("stopped") }
     @objc private func powerUp() { selected?.pet.powerMove() }
     @objc private func placeItem(_ sender: NSMenuItem) { togglePlace(Place.allCases[sender.tag]) }
-    @objc private func themeItem(_ sender: NSMenuItem) { env.theme = Theme.allCases[sender.tag] }
+    @objc private func themeItem(_ sender: NSMenuItem) {
+        let th = Theme.allCases[sender.tag]
+        if th == .none { env.clearWorld() } else { env.theme = th }
+    }
+    @objc private func weatherOff() { env.mode = .off; env.override = nil }
+    @objc private func noPlaces() {
+        props.places.forEach(props.remove)
+        props.savePlaces()
+    }
     @objc private func weatherItem(_ sender: NSMenuItem) {
         env.override = sender.tag < 0 ? nil : WeatherKind.allCases[sender.tag]
     }

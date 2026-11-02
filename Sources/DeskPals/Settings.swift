@@ -37,6 +37,7 @@ final class SettingsModel: ObservableObject {
     var hasPlace: (Place) -> Bool = { _ in false }
     var onGame: ((MiniGames.Kind) -> Void)?
     var onPower: (() -> Void)?
+    var onNoPlaces: (() -> Void)?
     var env: Environment?
 
     @Published private(set) var slots: [PetSlotInfo] {
@@ -449,7 +450,10 @@ private struct WorldTab: View {
                         HStack(spacing: 6) {
                             ForEach(Theme.allCases, id: \.self) { th in
                                 let owned = th.shopID.map { Economy.shared.owned.contains($0) } ?? true
-                                Button(owned ? th.title : "🔒 \(th.title)") { env.theme = th; model.tick += 1 }
+                                Button(owned ? th.title : "🔒 \(th.title)") {
+                                    if th == .none { env.clearWorld() } else { env.theme = th }
+                                    model.tick += 1
+                                }
                                     .disabled(!owned)
                                     .buttonStyle(.bordered)
                                     .tint(env.theme == th ? Color.accentColor : nil)
@@ -475,10 +479,12 @@ private struct WorldTab: View {
                         Text("Automatic").tag("auto")
                         ForEach(WeatherKind.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
                     }
+                    Toggle("Holiday decorations", isOn: Binding(get: { env.holidaysOn }, set: { env.holidaysOn = $0; model.tick += 1 }))
                     LabeledContent("Now") { Text(env.summary + (env.holiday != .none ? " · holiday decorations on" : "")).foregroundStyle(.secondary) }
                 }
                 LabeledContent("Places") {
                     VStack(alignment: .leading, spacing: 6) {
+                        Button("None (put them all away)") { model.onNoPlaces?(); model.tick += 1 }
                         ForEach(Place.allCases, id: \.self) { p in
                             HStack {
                                 Image(decorative: p.image(), scale: 1).interpolation(.none).resizable().scaledToFit().frame(width: 36, height: 28)

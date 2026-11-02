@@ -20,7 +20,7 @@ enum WeatherKind: String, CaseIterable {
 enum Theme: String, CaseIterable {
     case none, beach, forest, snowy, space
 
-    var title: String { self == .none ? "Plain" : rawValue.capitalized }
+    var title: String { self == .none ? "None" : rawValue.capitalized }
     var shopID: String? { self == .none ? nil : "theme.\(rawValue)" }
 }
 
@@ -85,7 +85,22 @@ final class Environment {
 
     enum Holiday { case none, halloween, christmas, newYear, valentine }
 
+    /// Holiday decorations (pumpkins, lights, fireworks) can be turned off.
+    var holidaysOn: Bool {
+        get { d.object(forKey: "holidays") as? Bool ?? true }
+        set { d.set(newValue, forKey: "holidays") }
+    }
+
+    /// No world at all: plain desktop, no weather, no holiday decorations.
+    func clearWorld() {
+        theme = .none
+        mode = .off
+        override = nil
+        holidaysOn = false
+    }
+
     var holiday: Holiday {
+        guard holidaysOn else { return .none }
         let c = Calendar.current.dateComponents([.month, .day, .hour], from: Date())
         switch (c.month ?? 0, c.day ?? 0) {
         case (10, 15...31), (11, 1): return .halloween
