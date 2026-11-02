@@ -26,6 +26,7 @@ very happy, and fight back when they're startled or thrown. A glowing pixel aura
 - **Heal**: runs to anyone who got knocked around or is dizzy and patches them up (healers come running after fights)
 - **Party**: puts on headphones and gets every pet dancing
 - **Cheer**: a big cheer that lifts everyone's mood
+- **Experiment**: a burst of colourful sparks that either works or blows up in its face
 
 Custom pets can also have a **rival**. When both are on screen they face off menacingly, clash barrages,
 duel in stopped time (anyone who can stop time can move in it), drop enormous things on each other,
@@ -139,9 +140,12 @@ Put a JSON file in `~/Library/Application Support/DeskPals/Pets/` and restart De
 - Optional: `mirrored`, `walkSpeed`, `jumpiness`, `curiosity`, `sleepiness`, `clickStyle` (`chase`/`startle`), `gravity`, `hops`,
   `bounciness`, `zoomy`, `climbs`, `clingy`, `trait`, `backHair` (art rows shown as hair from behind).
 - `special`: `fire`, `tentacles`, `spinKick` or `barrage`. `favorite`: fish, berry, cookie, pepper, coffee, taiyaki, cherry or matcha.
-- Power moves: `power` (`timeStop`, `transform`, `auraKick`, `vanish`, `heal`, `party`, `cheer`, or any special), `aura` (hex colour), `auraText` (glyphs that float
+- Power moves: `power` (`timeStop`, `transform`, `auraKick`, `vanish`, `heal`, `party`, `cheer`, `experiment`, or any special), `aura` (hex colour), `auraText` (glyphs that float
   around it), `powerShout`, and for `transform`: `transformArt`, `transformPalette`, `transformScale`. `startsGrown` skips the baby stage.
 - Friends: `bestie` (another pet's id) and `bestieLines`.
+- Progression: `progression` (a list of discoveries made one every `progressInterval` seconds, saved across launches),
+  `progressShout` (every tenth), `finaleShout` and `resetShout`. After the last discovery the pet builds a rocket,
+  counts down, flies to the moon, then crash-lands as a stone statue, cracks out and starts over.
 - Rivals: `rival` (another pet's id), `rivalStyle` (`fight` or `chase`), `rivalLines`, `winLines`, `loseLines`, `watchLines`, `projectile` (`knife`),
   and `dropArt` / `dropPalette` / `dropShout` for something enormous to drop on them.
 - `build.sh` also copies any `private-pets/*.json` (git-ignored) into that folder, for pets you keep to yourself.

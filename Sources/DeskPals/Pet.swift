@@ -37,6 +37,10 @@ final class Pet {
         case powerUp(until: Double, move: Special)
         case dash(until: Double, dir: CGFloat)
         case pose(until: Double)
+        // the trip to the moon
+        case rocketRide(start: Double)
+        case onMoon(until: Double)
+        case statue(until: Double)
         case hiding(window: Int, until: Double)
     }
 
@@ -84,6 +88,8 @@ final class Pet {
     /// Vanish: who to turn up behind. Heal: when this pet was last hurt.
     weak var vanishTarget: Pet?
     var hurtUntil = 0.0
+    var progressClock = 0.0
+    var rocketBase = CGPoint.zero
     /// What's drawn: the transformed form while it lasts.
     var drawSheet: SpriteSheet { formSheet ?? sheet }
     var umbrella = false
@@ -190,7 +196,8 @@ final class Pet {
     var isAsleep: Bool { if case .sleep = state { return true }; return false }
     var isHidden: Bool {
         switch state {
-        case .trashed, .hidden, .inside: return true
+        case .trashed, .hidden, .inside, .onMoon: return true
+        case .rocketRide(let start): return t - start > 2.6
         default: return false
         }
     }
@@ -246,6 +253,7 @@ final class Pet {
         updateParticles(dt)
         needs.tick(dt, asleep: isAsleep)
         powerTick(dt)
+        progressTick(dt)
         if scriptedTick(dt) { return }
 
         switch state {
@@ -668,6 +676,7 @@ final class Pet {
         switch kind.special {
         case .none: break
         case .timeStop, .transform, .auraKick, .vanish, .heal, .party, .cheer: powerMove()
+        case .experiment: experiment()
         case .fire:
             puffFire()
             hold(1.5)
@@ -1481,8 +1490,14 @@ final class Pet {
         case .sulk:
             l.pose = .sit
             l.eyes = .angry
-        case .trashed, .hidden, .inside:
+        case .trashed, .hidden, .inside, .onMoon:
             l.hidden = true
+        case .rocketRide:
+            l.hidden = isHidden
+            l.eyes = .happy
+        case .statue:
+            l.eyes = .closed
+            l.sy = 1
         case .ceiling:
             l.pose = .air
             l.rot = CGFloat(sin(t * 6) * 0.15)

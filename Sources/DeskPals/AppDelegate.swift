@@ -118,6 +118,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         default: Rivalry.piggyback(a, b)
                         }
                     }
+                case let cmd where cmd.hasPrefix("progress:"):
+                    let parts = cmd.split(separator: ":")
+                    if parts.count == 3, let s = self.slots.first(where: { $0.uid == String(parts[1]) }), let n = Int(parts[2]) {
+                        s.pet.progressStep = n
+                        s.pet.progressClock = s.pet.kind.progressInterval - 1
+                    }
                 case "chase":
                     let ps = self.pets
                     if let prey = ps.first(where: { $0.kind.power == .vanish }), let hunter = ps.first(where: { $0.kind.id == prey.kind.rival }) {

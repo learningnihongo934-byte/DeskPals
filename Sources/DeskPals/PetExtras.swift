@@ -17,6 +17,9 @@ extension Pet {
         case .hiding(let id, let until): hidingTick(id, until)
         case .powerUp(let until, let move): powerUpTick(until, move)
         case .dash(let until, let dir): dashTick(until, dir, dt)
+        case .rocketRide(let start): rocketTick(start)
+        case .onMoon(let until): moonTick(until)
+        case .statue(let until): statueTick(until, dt)
         default: return false
         }
         return true

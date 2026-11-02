@@ -6,7 +6,7 @@ final class FX {
     static let shared = FX()
 
     struct Effect {
-        enum Kind { case ring, flash, speedLines, glyph(String), hits, projectiles(CGImage, CGPoint), drop(CGImage, CGPoint, CGFloat) }
+        enum Kind { case ring, flash, speedLines, glyph(String), hits, projectiles(CGImage, CGPoint), drop(CGImage, CGPoint, CGFloat), rocket, moon(CGImage) }
         let kind: Kind
         let center: CGPoint
         let start: Double
@@ -45,6 +45,13 @@ final class FX {
     func glyph(_ text: String, at c: CGPoint, color: UInt32) { add(.glyph(text), c, 1.3, color: color) }
     func hits(at c: CGPoint, color: UInt32, duration: Double = 0.8) { add(.hits, c, duration, color: color, radius: 40) }
     func shake(_ amount: CGFloat) { shakeAmount = max(shakeAmount, amount) }
+    /// A rocket that builds itself at `base`, counts down, and launches.
+    func rocket(at base: CGPoint, scale: CGFloat) { add(.rocket, base, 8.6, radius: scale) }
+    /// A moon in the corner of the main screen with a little pet waving from it.
+    func moon(with pet: CGImage, scale: CGFloat, duration: Double) {
+        let top = NSScreen.screens.first?.frame ?? .zero
+        add(.moon(pet), CGPoint(x: top.maxX - 200, y: top.maxY - 230), duration, radius: scale)
+    }
     /// A volley of thrown things flying from one point to another.
     func projectiles(_ img: CGImage, from: CGPoint, to: CGPoint, duration: Double = 0.5) {
         add(.projectiles(img, from), to, duration, radius: 0)
@@ -115,6 +122,11 @@ final class FXOverlay: NSPanel {
 }
 
 private final class FXView: NSView {
+    static let rocketImage = Pixels.image([
+        "....r....", "...rrr...", "...rrr...", "..wwwww..", "..wwwww..", "..wwbww..", "..wbbbw..", "..wwbww..",
+        "..wwwww..", "..wwwww..", "..wwwww..", "..wwwww..", ".rwwwwwr.", "rrwwwwwrr", "rr.ggg.rr", "r..ggg..r",
+    ], ["r": 0xE53935, "w": 0xF4F4F4, "b": 0x4FC3F7, "g": 0x8A8A96])
+
     private func color(_ hex: UInt32, _ alpha: CGFloat) -> CGColor {
         CGColor(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
     }
@@ -214,6 +226,51 @@ private final class FXView: NSView {
                 ctx.rotate(by: rot)
                 ctx.draw(img, in: CGRect(x: -w / 2, y: -h / 2, width: w, height: h))
                 ctx.restoreGState()
+            case .rocket:
+                let age = now - e.start, px = e.radius
+                let img = Self.rocketImage
+                let w = CGFloat(img.width) * px, h = CGFloat(img.height) * px
+                var y = c.y, alpha: CGFloat = 1
+                if age < 2 { alpha = CGFloat(age / 2) }
+                if age > 4.5 { y += CGFloat(0.5 * 900 * pow(age - 4.5, 2)) }
+                if age > 4.2 {   // flames and smoke
+                    for i in 0..<6 {
+                        let f = CGFloat((Int(now * 30) + i * 7) % 5)
+                        ctx.setFillColor(color(i % 2 == 0 ? 0xFFE066 : 0xFF8A1F, 0.9))
+                        ctx.fill(CGRect(x: c.x - w * 0.3 + CGFloat(i) * w * 0.1, y: y - 10 - f * 6, width: w * 0.1, height: 14 + f * 4))
+                    }
+                    for i in 0..<5 {
+                        let k = CGFloat(min(3, age - 4.2)) + CGFloat(i) * 0.3
+                        ctx.setFillColor(color(0xCCCCCC, max(0, 0.6 - k * 0.15)))
+                        ctx.fillEllipse(in: CGRect(x: c.x + CGFloat(i - 2) * 30 * k - 25, y: c.y - 10, width: 50 + k * 20, height: 30 + k * 10))
+                    }
+                }
+                ctx.saveGState()
+                ctx.setAlpha(alpha)
+                ctx.draw(img, in: CGRect(x: c.x - w / 2, y: y, width: w, height: h))
+                ctx.restoreGState()
+                if age > 2.6, age < 4.5 {
+                    let n = 3 - Int((age - 2.6) / 0.64)
+                    let text = NSAttributedString(string: "\(max(1, n))", attributes: [
+                        .font: NSFont.systemFont(ofSize: 40, weight: .black), .foregroundColor: NSColor.white,
+                        .strokeColor: NSColor(white: 0.1, alpha: 1), .strokeWidth: -4])
+                    text.draw(at: CGPoint(x: c.x - text.size().width / 2, y: c.y + h + 10))
+                }
+            case .moon(let img):
+                guard window.screen == NSScreen.screens.first else { continue }
+                let r: CGFloat = 90
+                let bob = CGFloat(sin(now * 2) * 4)
+                ctx.setFillColor(color(0xE6E2D6, 1))
+                ctx.fillEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2))
+                ctx.setFillColor(color(0xC9C4B4, 1))
+                for (dx, dy, cr) in [(-30.0, 20.0, 18.0), (25.0, -25.0, 14.0), (35.0, 30.0, 10.0), (-20.0, -40.0, 9.0)] {
+                    ctx.fillEllipse(in: CGRect(x: c.x + dx - cr, y: c.y + dy - cr, width: cr * 2, height: cr * 2))
+                }
+                let pw = CGFloat(img.width) * e.radius
+                ctx.draw(img, in: CGRect(x: c.x - pw / 2, y: c.y + r - 8 + bob, width: pw, height: pw))
+                ctx.setFillColor(color(0xE53935, 1))   // a little flag
+                ctx.fill(CGRect(x: c.x + pw * 0.6, y: c.y + r - 4, width: 3, height: 40))
+                ctx.fill(CGRect(x: c.x + pw * 0.6 + 3, y: c.y + r + 24, width: 22, height: 14))
             case .hits:
                 let img = Particle.image(.fist)
                 for i in 0..<6 {

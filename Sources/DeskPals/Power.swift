@@ -163,6 +163,8 @@ extension Pet {
             } else {
                 jump(to: spot, then: treat)
             }
+        case .experiment:
+            experiment()
         case .party:
             // headphones on: everyone dances
             say(shout ?? "♪♪♪", 2.5)

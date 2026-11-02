@@ -55,6 +55,11 @@ enum CustomPets {
         let rivalStyle: String?
         let bestie: String?
         let bestieLines: [String]?
+        let progression: [String]?
+        let progressInterval: Double?
+        let progressShout: String?
+        let finaleShout: String?
+        let resetShout: String?
     }
 
     static func load() -> [PetKind] {
@@ -109,6 +114,11 @@ enum CustomPets {
         kind.rivalStyle = f.rivalStyle
         kind.bestie = f.bestie
         kind.bestieLines = f.bestieLines ?? []
+        kind.progression = f.progression
+        kind.progressInterval = max(5, f.progressInterval ?? 60)
+        kind.progressShout = f.progressShout
+        kind.finaleShout = f.finaleShout
+        kind.resetShout = f.resetShout
         return kind
     }
 }

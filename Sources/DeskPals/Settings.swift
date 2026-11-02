@@ -222,6 +222,16 @@ private struct PetTab: View {
                             ProgressView(value: needs?.levelProgress ?? 0)
                         }
                     }
+                    if let list = model.kind.progression, !list.isEmpty {
+                        let step = UserDefaults.standard.integer(forKey: "progress.\(model.selectedUID)")
+                        LabeledContent("Discoveries") {
+                            HStack {
+                                ProgressView(value: Double(min(step, list.count)), total: Double(list.count))
+                                Text(step < list.count ? "\(step)/\(list.count) · next: \(list[step])" : "off to the moon!")
+                                    .monospacedDigit().frame(width: 220, alignment: .leading)
+                            }
+                        }
+                    }
                     Meter(title: "Full", value: needs?.fullness ?? 0, tint: .orange)
                     Meter(title: "Happy", value: needs?.happiness ?? 0, tint: .pink)
                     Meter(title: "Energy", value: needs?.energy ?? 0, tint: .green)
