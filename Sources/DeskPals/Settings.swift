@@ -172,6 +172,7 @@ struct SettingsView: View {
                 ShopTab(model: model).tabItem { Text("Shop") }
                 GoalsTab(model: model).tabItem { Text("Goals & games") }
                 BehaviorTab(model: model).tabItem { Text("Behavior") }
+                WatchPartyTab().tabItem { Text("Watch party") }
             }
             HStack {
                 Button("Call \(model.displayName) here") { model.onCall?() }
@@ -310,6 +311,49 @@ private struct Meter: View {
                 Text("\(Int(value * 100))%").monospacedDigit().frame(width: 40, alignment: .trailing)
             }
         }
+    }
+}
+
+/// Live AI reactions to whatever the pets are watching (see WatchParty).
+private struct WatchPartyTab: View {
+    @State private var on = WatchParty.shared.enabled
+    @State private var modelName = WatchParty.shared.model
+    @State private var interval = WatchParty.shared.interval
+
+    var body: some View {
+        Form {
+            Toggle("Pets react live to what you watch", isOn: $on)
+                .onChange(of: on) { WatchParty.shared.enabled = $0 }
+            TextField("Model", text: $modelName, prompt: Text("qwen3.5:4b"))
+                .onSubmit { WatchParty.shared.model = modelName }
+            LabeledContent("React every") {
+                HStack {
+                    Slider(value: $interval, in: 5...30, step: 1)
+                        .onChange(of: interval) { WatchParty.shared.interval = $0 }
+                    Text("\(Int(interval)) s").monospacedDigit().frame(width: 40, alignment: .trailing)
+                }
+            }
+            TimelineView(.periodic(from: .now, by: 1)) { _ in
+                LabeledContent("Status") {
+                    HStack {
+                        Text(on ? WatchParty.shared.status : "Off").foregroundStyle(.secondary)
+                        if on, !WatchParty.shared.hasScreenAccess {
+                            Button("Allow screen recording…") { WatchParty.shared.requestScreenAccess() }
+                        }
+                        Button("Check again") { WatchParty.shared.model = modelName }
+                    }
+                }
+            }
+            Text("""
+            While your pets watch a video, a small AI model on your Mac (through Ollama) looks at a snapshot of \
+            just that video window every few seconds and writes what each pet says. They turn around, react, and \
+            answer each other. Nothing leaves your Mac and nothing is saved. Any Ollama model that can see images works.
+            """)
+            .font(.caption).foregroundStyle(.secondary)
+        }
+        .padding(12)
+        .onAppear { WatchParty.shared.checkOllama() }
+        .onDisappear { if modelName != WatchParty.shared.model, !modelName.isEmpty { WatchParty.shared.model = modelName } }
     }
 }
 

@@ -98,6 +98,16 @@ and cuddle up while watching videos.
 - Falls asleep when you step away, says good morning, and nags you to sleep late at night
 - Counts the days you've been together, notices your favorite app, and asks to play when it's bored
 
+## Watch party (local AI)
+
+Turn on **Watch party** (menu bar, or Settings → Watch party) and your pets react live to whatever video they're watching.
+Every few seconds a small vision model running on your Mac through [Ollama](https://ollama.com) looks at a snapshot of
+just the video window and writes an in-character line and mood for each pet. They turn around to face you, react,
+and answer each other. Snapshots never leave your Mac and are never saved.
+
+Needs Ollama with a model that can see images (default `qwen3.5:4b`; about 1.5 s per reaction on an M-series Mac)
+and Screen Recording permission.
+
 ## Settings
 
 Open DeskPals again (from Finder, Spotlight or Launchpad) or choose **Settings…** in the menu bar.
@@ -174,6 +184,7 @@ Needs macOS 13+ and Xcode or the Swift toolchain.
 - `Power.swift`, `FX.swift`, `Rivalry.swift`: power moves, auras, the effects layer and rivals
 - `Economy.swift`, `Places.swift`, `Environment.swift`, `MiniGames.swift`, `Sound.swift`: coins and quests, places, weather and worlds, games, sound effects
 - `PetExtras.swift`: menu bar, notch, screen edges, places, mischief and weather reactions
+- `WatchParty.swift`: live AI reactions to videos through a local Ollama model
 - `Settings.swift`: the Settings window and saved preferences
 - `Icon.swift`: draws the app icon
 - `AppDelegate.swift`: menu bar and the 60 fps loop

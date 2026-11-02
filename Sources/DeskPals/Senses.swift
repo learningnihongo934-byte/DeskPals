@@ -41,6 +41,8 @@ final class Senses {
     private var lastBatteryNag = -10000.0
     private var sleptAt: Date?
     private var videoSeen = 0.0, videoGone = 0.0
+    /// The video window pets are watching right now, if any.
+    private(set) var currentVideo: WindowInfo?
     private var battery: (percent: Int, charging: Bool)?
     private var monitors: [Any] = []
     private var readingLedges = false
@@ -200,11 +202,14 @@ final class Senses {
 
     private func checkVideo() {
         guard Senses.on(Keys.video) else {
+            currentVideo = nil
             videoSeen = 0
             pets.forEach { $0.stopWatching(nil) }
             return
         }
-        if let win = videoWindow() {
+        let found = videoWindow()
+        currentVideo = found
+        if let win = found {
             videoGone = 0
             videoSeen += 2
             if videoSeen >= 2 {

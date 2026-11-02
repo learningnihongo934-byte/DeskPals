@@ -151,6 +151,8 @@ final class Pet {
     var watchSeat: CGFloat = 0.8
     var watchSince = 0.0
     var nextWatchReact = 0.0
+    var partyMood = "calm"
+    var partyUntil = 0.0
     var nextPopcorn = 0.0
     var watchDeclinedUntil = 0.0
 
@@ -1002,6 +1004,30 @@ final class Pet {
         }
     }
 
+    /// Watch party: turn around to face you and react with a mood.
+    func partyReact(_ line: String, mood: String) {
+        guard isWatching else { return }
+        if !line.isEmpty { say(line, max(2.4, Double(line.count) * 0.1)) }
+        partyMood = mood
+        partyUntil = t + max(2.8, Double(line.count) * 0.1)
+        nextWatchReact = t + 45   // the AI does the talking now
+        switch mood {
+        case "laugh", "happy":
+            happyUntil = partyUntil
+            emit(.sparkle, at: head, count: 3, vy: 40...90, gravity: 0)
+        case "love":
+            loveUntil = partyUntil
+            blushUntil = partyUntil
+            emit(.heart, at: head, count: 3, vx: -40...40, vy: 60...110, gravity: 0, life: 1...1.4)
+        case "shocked", "scared":
+            squash = 0.6
+            emit(.sweat, at: head, count: 3, vx: -40...40, vy: 40...90, gravity: 400)
+        case "sad":
+            emit(.sweat, at: CGPoint(x: pos.x, y: pos.y + size * 0.55), count: 2, vx: -20...20, vy: 0...30, gravity: 300)
+        default: break
+        }
+    }
+
     // MARK: - Reactions
 
     func noticeWindow(_ id: Int) {
@@ -1470,6 +1496,28 @@ final class Pet {
             l.pose = .air
             l.rot = CGFloat(sin(t * 3) * 0.12)
             l.eyes = .open
+        case .watch where partyUntil > t:
+            // turned around to react
+            l.pose = .sit
+            l.popcorn = true
+            switch partyMood {
+            case "laugh":
+                l.eyes = .happy
+                l.lift = CGFloat(abs(sin(t * 14)) * 1.5)
+            case "happy": l.eyes = .happy
+            case "love": l.eyes = .love
+            case "shocked":
+                l.eyes = .open
+                l.sy = 1.08
+            case "scared":
+                l.eyes = .sad
+                l.rot = CGFloat(sin(t * 40) * 0.05)
+            case "sad": l.eyes = .sad
+            case "angry":
+                l.eyes = .angry
+                l.rot = CGFloat(sin(t * 25) * 0.04)
+            default: break
+            }
         case .watch:
             l.pose = .back
             l.popcorn = t - watchSince < 1500

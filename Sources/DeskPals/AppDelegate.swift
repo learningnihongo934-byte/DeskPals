@@ -75,6 +75,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             for p in self.pets where !self.world.bounds.contains(p.pos) { p.dropIn(atX: self.world.bounds.midX) }
         }
 
+        if WatchParty.shared.enabled {
+            WatchParty.shared.checkOllama()
+            if !WatchParty.shared.hasScreenAccess { WatchParty.shared.requestScreenAccess() }
+        }
+
         let timer = Timer(timeInterval: 1.0 / 60, repeats: true) { [weak self] _ in self?.tick() }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
@@ -239,6 +244,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             senses.newWindows(world.refresh())
         }
         senses.tick(dt)
+        WatchParty.shared.tick(pets: pets, video: senses.currentVideo, clock: now)
         env.tick(dt)
         games.tick(dt)
         let mouse = NSEvent.mouseLocation, pressed = NSEvent.pressedMouseButtons != 0
@@ -448,6 +454,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let reactItem = item("Reacts to", nil)
         reactItem.submenu = reactMenu
         menu.addItem(reactItem)
+        let party = item("Watch party (AI reactions)", #selector(toggleParty))
+        party.state = WatchParty.shared.enabled ? .on : .off
+        menu.addItem(party)
 
         menu.addItem(.separator())
         menu.addItem(item("Settings…", #selector(showSettings), key: ","))
@@ -458,6 +467,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let pet = selected?.pet else { return }
         status.button?.image = SpriteSheet.icon(for: pet.kind, points: 18)
         status.button?.toolTip = slots.count == 1 ? "\(settings.displayName) the \(pet.kind.species)" : "\(slots.count) pets"
+    }
+
+    @objc private func toggleParty() {
+        WatchParty.shared.enabled.toggle()
+        if WatchParty.shared.enabled, !WatchParty.shared.hasScreenAccess { WatchParty.shared.requestScreenAccess() }
     }
 
     @objc private func showSettings() {
