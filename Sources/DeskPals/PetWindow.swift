@@ -29,13 +29,23 @@ final class PetWindow: NSPanel {
     /// Room around the pet for hats, speech bubbles, particles and climbing sideways.
     var margin: CGFloat { pet.size * 0.7 + 10 }
 
+    private var lastSig = ""
+
     func sync() {
         let w = max(pet.size * 3.4, 340), h = pet.size * 2.4 + 160 + pet.bubbleOffset
         let shake = FX.shared.shakeOffset
         let origin = CGPoint(x: (pet.pos.x - w / 2 + shake.x).rounded(), y: (pet.pos.y - margin + shake.y).rounded())
-        setFrame(CGRect(origin: origin, size: CGSize(width: w, height: h)), display: false)
+        let newFrame = CGRect(origin: origin, size: CGSize(width: w, height: h))
+        let moved = newFrame != frame
+        if moved { setFrame(newFrame, display: false) }
         petView.feet = CGPoint(x: pet.pos.x - origin.x, y: pet.pos.y - origin.y)
-        petView.needsDisplay = true
+        // Only redraw when something visible changed (a still pet watching a video costs nothing).
+        let l = pet.look()
+        let sig = "\(l.pose)|\(l.eyes)|\(Int(l.sx * 200))|\(Int(l.sy * 200))|\(Int(l.rot * 200))|\(Int(l.lift * 20))|\(l.flip)|\(l.blush)|\(l.hidden)|\(l.popcorn)|\(pet.bubble ?? "")|\(Int(pet.bubbleOffset))|\(pet.accessory.rawValue)|\(Int(pet.aura * 20))|\(Int(pet.size))"
+        if moved || sig != lastSig || !pet.particles.isEmpty || pet.aura > 0.01 {
+            lastSig = sig
+            petView.needsDisplay = true
+        }
         // Hide & seek: tuck the pet's window behind the window it's hiding behind.
         if let id = pet.hidingWindowID {
             if level != .normal { level = .normal }

@@ -306,7 +306,7 @@ final class Senses {
 
     /// Text boxes, buttons and toolbars in the app you're using, as extra ledges.
     func refreshLedges() {
-        guard Senses.on(Keys.ledges), DockReader.trusted,
+        guard Senses.on(Keys.ledges), DockReader.trusted, currentVideo == nil,   // skip while a video plays
               let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != me,
               let flipH = NSScreen.screens.first?.frame.height else {
             world.ledges = nil

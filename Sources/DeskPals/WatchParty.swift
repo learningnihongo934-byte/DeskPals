@@ -17,7 +17,7 @@ final class WatchParty {
         set { d.set(newValue, forKey: "party.model"); checkOllama() }
     }
     var interval: Double {
-        get { d.object(forKey: "party.interval") as? Double ?? 10 }
+        get { d.object(forKey: "party.interval") as? Double ?? 15 }
         set { d.set(newValue, forKey: "party.interval") }
     }
     private(set) var status = "Off"
@@ -131,9 +131,9 @@ final class WatchParty {
 
     private func ask(model: String, prompt: String, jpeg: Data) async -> [String: (line: String, mood: String)]? {
         let body: [String: Any] = [
-            "model": model, "stream": false, "think": false, "format": "json", "keep_alive": "15m",
+            "model": model, "stream": false, "think": false, "format": "json", "keep_alive": "3m",
             "messages": [["role": "user", "content": prompt, "images": [jpeg.base64EncodedString()]]],
-            "options": ["temperature": 0.9, "num_predict": 200],
+            "options": ["temperature": 0.9, "num_predict": 200, "num_ctx": 2048],
         ]
         var req = URLRequest(url: endpoint.appendingPathComponent("api/chat"))
         req.httpMethod = "POST"
@@ -181,7 +181,7 @@ final class WatchParty {
             guard let win = content.windows.first(where: { $0.windowID == CGWindowID(windowID) }) else { return nil }
             let filter = SCContentFilter(desktopIndependentWindow: win)
             let cfg = SCStreamConfiguration()
-            let scale = 640 / max(win.frame.width, win.frame.height, 1)
+            let scale = 448 / max(win.frame.width, win.frame.height, 1)
             cfg.width = max(64, Int(win.frame.width * scale))
             cfg.height = max(64, Int(win.frame.height * scale))
             cfg.showsCursor = false

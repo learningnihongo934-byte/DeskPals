@@ -242,7 +242,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         last = now
         clock += dt
         worldClock += dt
-        if worldClock >= 1.0 / 30 {
+        if worldClock >= (pets.allSatisfy { $0.isWatching || $0.isAsleep } ? 1.0 / 8 : 1.0 / 30) {   // slower while everyone sits still
             worldClock = 0
             senses.newWindows(world.refresh())
         }
