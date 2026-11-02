@@ -44,6 +44,10 @@ final class Pet {
     private(set) var sheet: SpriteSheet
     var scale: CGFloat
     var name: String
+    /// Platform id of the top of this pet's head, so other pets can stand on it.
+    var headID = 0
+    /// The other pets on screen.
+    var friends: () -> [Pet] = { [] }
     var accessory: Accessory = .none
     let world: World
     let needs: Needs
@@ -302,7 +306,7 @@ final class Pet {
             vel.dy = min(vel.dy, 0)
         }
 
-        if vel.dy <= 0, let p = world.landing(x: pos.x, from: prevY, to: pos.y) {
+        if vel.dy <= 0, let p = world.landing(x: pos.x, from: prevY, to: pos.y, ignoring: headID) {
             land(on: p)
         } else if pos.y < b.minY - 300 {
             dropIn(atX: pos.x)   // slipped into a gap between screens
@@ -469,7 +473,7 @@ final class Pet {
         let nx = pos.x + dir * step
         if let p = world.platform(standingOn), !p.holds(nx) {
             // A higher ledge right ahead (like the Dock from the floor): hop up onto it.
-            if let next = world.step(at: nx + dir * size * 0.3, from: pos.y, excluding: p.id), next.y > pos.y + 4 {
+            if let next = world.step(at: nx + dir * size * 0.3, from: pos.y, excluding: p.id, self: headID), next.y > pos.y + 4 {
                 let resume = onArrive
                 jump(to: CGPoint(x: nx + dir * size * 0.4, y: next.y)) { [weak self] in
                     self?.walk(to: target, run: run, then: resume)
@@ -511,9 +515,10 @@ final class Pet {
         if kind.climbs, chance(0.05), walkToWall() { return }
         if e > 0.4, chance(kind.zoomy * needs.happiness * 1.5) { startZoomies(); return }
         if kind.clingy, chance(0.2), followCursor() { return }
+        if chance(0.07), climbOnFriend() { return }
 
         let r = Double.random(in: 0..<1)
-        if r < kind.jumpiness * (0.5 + e), let target = world.hopTarget(from: pos, excluding: standingOn, margin: size / 2) {
+        if r < kind.jumpiness * (0.5 + e), let target = world.hopTarget(from: pos, excluding: standingOn, self: headID, margin: size / 2) {
             jump(to: target)
             return
         }
@@ -686,6 +691,58 @@ final class Pet {
         if let c = cursorPos { facingRight = c.x < pos.x }
     }
 
+    // MARK: - Friends
+
+    /// The top of this pet's head, as a tiny ledge for other pets.
+    var headPlatform: Platform? {
+        guard isGrounded else { return nil }
+        switch state {
+        case .hang, .trashed, .climb, .watch: return nil
+        default: break
+        }
+        let top = pos.y + size * (isAsleep ? 0.62 : 0.88)
+        let w = size * 0.6
+        let frame = CGRect(x: pos.x - w / 2, y: pos.y, width: w, height: top - pos.y)
+        return Platform(id: headID, frame: frame, y: top, segments: [frame.minX...frame.maxX])
+    }
+
+    private func climbOnFriend() -> Bool {
+        guard let f = friends().filter({ $0 !== self && $0.isCalm && $0.standingOn != headID && abs($0.pos.x - pos.x) < 500 }).randomElement(),
+              let head = f.headPlatform else { return false }
+        say(["hop!", "up I go", "tower time!"].randomElement()!, 1.2)
+        jump(to: CGPoint(x: f.pos.x, y: head.y)) { [weak self] in
+            self?.happyUntil = (self?.t ?? 0) + 1.5
+            self?.sitDown(4)
+        }
+        return true
+    }
+
+    /// Two pets bumped into each other.
+    func greet(_ other: Pet) {
+        guard isCalm else { return }
+        facingRight = other.pos.x > pos.x
+        say(["hi \(other.name)!", "hey!", kind.sound, "♥"].randomElement()!, 1.6)
+        happyUntil = t + 1.5
+        sitDown(2)
+    }
+
+    /// Tag: one runs off, the other chases.
+    func runFrom(_ other: Pet) {
+        guard let seg = currentSegment() else { return }
+        let dir: CGFloat = pos.x > other.pos.x ? 1 : -1
+        say("can't catch me!", 1.4)
+        walk(to: clamp(pos.x + dir * 400, seg.lowerBound + size / 2, seg.upperBound - size / 2), run: true)
+    }
+
+    func chase(_ other: Pet) {
+        guard let seg = currentSegment() else { return }
+        after(0.5) { [weak self, weak other] in
+            guard let self, let other, self.isCalm else { return }
+            self.say("tag!", 1)
+            self.walk(to: clamp(other.pos.x, seg.lowerBound + self.size / 2, seg.upperBound - self.size / 2), run: true)
+        }
+    }
+
     // MARK: - Dock
 
     private func dockHop() -> Bool {
@@ -823,9 +880,10 @@ final class Pet {
 
     // MARK: - Videos
 
-    func startWatching(_ win: WindowInfo) -> Bool {
+    /// `seat` is how far along the bottom of the video to sit, 0...1.
+    func startWatching(_ win: WindowInfo, seat: CGFloat = .random(in: 0.55...0.9)) -> Bool {
         guard isCalm, t > watchDeclinedUntil else { return false }
-        watchSeat = .random(in: 0.72...0.86)
+        watchSeat = seat
         let seat = CGPoint(x: win.frame.minX + win.frame.width * watchSeat, y: win.frame.minY + 2)
         say(["ooh, a video!", "movie time!", "what are we watching?"].randomElement()!, 1.8)
         jump(to: seat, exact: true) { [weak self] in

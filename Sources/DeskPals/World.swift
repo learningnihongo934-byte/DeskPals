@@ -145,14 +145,14 @@ final class World {
     }
 
     /// A ledge just ahead that is a small step up or down from `y`, for walking off one platform onto another.
-    func step(at x: CGFloat, from y: CGFloat, excluding id: Int?) -> Platform? {
-        platforms.filter { $0.id != id && $0.holds(x) && abs($0.y - y) < 220 }.max { $0.y < $1.y }
+    func step(at x: CGFloat, from y: CGFloat, excluding id: Int?, self own: Int? = nil) -> Platform? {
+        platforms.filter { $0.id != id && $0.id != own && $0.holds(x) && abs($0.y - y) < 220 }.max { $0.y < $1.y }
     }
 
     /// A random spot on another ledge within jumping range.
-    func hopTarget(from p: CGPoint, excluding id: Int?, margin: CGFloat) -> CGPoint? {
+    func hopTarget(from p: CGPoint, excluding id: Int?, self own: Int? = nil, margin: CGFloat) -> CGPoint? {
         var options: [CGPoint] = []
-        for pl in platforms where pl.id != id {
+        for pl in platforms where pl.id != id && pl.id != own {
             let rise = pl.y - p.y
             guard rise < 520, rise > -1400 else { continue }
             for s in pl.segments where s.upperBound - s.lowerBound > margin * 2 {

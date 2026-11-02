@@ -10,7 +10,8 @@ gets hungry, plays ball, and reacts to almost everything you do.
 | **Ember** the fox | Fast, nosy about new windows, gets the zoomies, loves cookies |
 | **Pip** the dragon | Jumpy, glides and flaps instead of falling, puffs fire, loves peppers |
 
-You can rename your pet in Settings.
+Have as many pets on screen as you like, even several of the same kind. Each one has its own name, needs and outfit.
+They say hi when they meet, play tag, and climb onto each other's heads to build pet towers.
 
 ## Physics and movement
 
@@ -59,7 +60,8 @@ You can rename your pet in Settings.
 ## Settings
 
 Open DeskPals again (from Finder, Spotlight or Launchpad) or choose **Settings…** in the menu bar.
-The **Pet** tab has your pet, its name, its needs, care buttons and outfits.
+The **Pets** tab lists the pets on your screen (click one to edit it, × to remove it), lets you add more,
+and has the selected pet's name, needs, care buttons and outfits.
 The **Behavior** tab has its size, every reaction on its own switch, nap time, speech bubbles and opening at login.
 
 ## Privacy and permissions

@@ -2,6 +2,13 @@ import AppKit
 import ServiceManagement
 import SwiftUI
 
+/// One pet on screen. `uid` keys its name, outfit and needs; the first of each kind uses the kind's id.
+struct PetSlotInfo: Identifiable, Equatable {
+    let uid: String
+    let kindID: String
+    var id: String { uid }
+}
+
 /// Every user setting lives here and in UserDefaults. The menu bar and the Settings window
 /// both change these properties, and the app is told through the callbacks.
 final class SettingsModel: ObservableObject {
@@ -13,32 +20,37 @@ final class SettingsModel: ObservableObject {
     ]
 
     private let d = UserDefaults.standard
-    var onPet: ((PetKind) -> Void)?
+    var onAdd: ((PetSlotInfo) -> Void)?
+    var onRemove: ((String) -> Void)?
+    var onSelect: (() -> Void)?
     var onScale: ((CGFloat) -> Void)?
     var onCall: (() -> Void)?
-    var onName: ((String) -> Void)?
-    var onAccessory: ((Accessory) -> Void)?
+    var onName: ((String, String) -> Void)?
+    var onAccessory: ((String, Accessory) -> Void)?
     var onReactionsChanged: (() -> Void)?
     var onFeed: ((Food) -> Void)?
     var onBall: (() -> Void)?
     var onBed: (() -> Void)?
     var hasBed: () -> Bool = { false }
-    var needs: Needs?
+    var needsFor: (String) -> Needs? = { _ in nil }
 
-    @Published var petID: String {
+    @Published private(set) var slots: [PetSlotInfo] {
+        didSet { d.set(slots.map { ["uid": $0.uid, "kind": $0.kindID] }, forKey: Keys.pets) }
+    }
+    /// The pet the Settings window and the care buttons are about.
+    @Published var selectedUID: String {
         didSet {
-            guard petID != oldValue else { return }
-            d.set(petID, forKey: Keys.pet)
-            petName = d.string(forKey: Keys.name(petID)) ?? kind.name
-            accessory = Accessory(rawValue: d.string(forKey: Keys.accessory(petID)) ?? "") ?? .none
-            onPet?(kind)
+            guard selectedUID != oldValue, let slot = selected else { return }
+            petName = d.string(forKey: Keys.name(slot.uid)) ?? ""
+            accessory = Self.accessory(of: slot)
+            onSelect?()
         }
     }
     @Published var petName: String {
-        didSet { d.set(petName, forKey: Keys.name(petID)); onName?(displayName) }
+        didSet { d.set(petName, forKey: Keys.name(selectedUID)); onName?(selectedUID, displayName) }
     }
     @Published var accessory: Accessory {
-        didSet { d.set(accessory.rawValue, forKey: Keys.accessory(petID)); onAccessory?(accessory) }
+        didSet { d.set(accessory.rawValue, forKey: Keys.accessory(selectedUID)); onAccessory?(selectedUID, accessory) }
     }
     @Published var scale: Double { didSet { d.set(scale, forKey: Keys.scale); onScale?(CGFloat(scale)) } }
     @Published var reacts: [String: Bool] {
@@ -59,12 +71,21 @@ final class SettingsModel: ObservableObject {
 
     init() {
         let ud = UserDefaults.standard
+        var list: [PetSlotInfo] = []
+        if let saved = ud.array(forKey: Keys.pets) as? [[String: String]] {
+            list = saved.compactMap { e in
+                guard let u = e["uid"], let k = e["kind"], PetKind.all.contains(where: { $0.id == k }) else { return nil }
+                return PetSlotInfo(uid: u, kindID: k)
+            }
+        } else if let old = ud.string(forKey: Keys.pet), PetKind.all.contains(where: { $0.id == old }) {
+            list = [PetSlotInfo(uid: old, kindID: old)]   // from before you could have several
+        }
+        if list.isEmpty { list = [PetSlotInfo(uid: PetKind.all[0].id, kindID: PetKind.all[0].id)] }
+        slots = list
+        selectedUID = list[0].uid
+        petName = ud.string(forKey: Keys.name(list[0].uid)) ?? ""
+        accessory = Self.accessory(of: list[0])
         let saved = ud.double(forKey: Keys.scale)
-        let savedPet = ud.string(forKey: Keys.pet)
-        let id = PetKind.all.first { $0.id == savedPet }?.id ?? PetKind.all[0].id
-        petID = id
-        petName = ud.string(forKey: Keys.name(id)) ?? (PetKind.all.first { $0.id == id }?.name ?? "")
-        accessory = Accessory(rawValue: ud.string(forKey: Keys.accessory(id)) ?? "") ?? .none
         scale = saved > 0 ? saved : 4
         reacts = Dictionary(uniqueKeysWithValues: Self.reactions.map { ($0.key, Senses.on($0.key)) })
         bubbles = Senses.on(Keys.bubbles)
@@ -72,10 +93,41 @@ final class SettingsModel: ObservableObject {
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
 
-    var kind: PetKind { PetKind.all.first { $0.id == petID } ?? PetKind.all[0] }
-    var displayName: String {
-        let n = petName.trimmingCharacters(in: .whitespaces)
-        return n.isEmpty ? kind.name : n
+    var selected: PetSlotInfo? { slots.first { $0.uid == selectedUID } }
+    var kind: PetKind { selected.map(Self.kind(of:)) ?? PetKind.all[0] }
+    var displayName: String { selected.map(Self.name(of:)) ?? kind.name }
+
+    static func kind(of slot: PetSlotInfo) -> PetKind { PetKind.all.first { $0.id == slot.kindID } ?? PetKind.all[0] }
+
+    static func name(of slot: PetSlotInfo) -> String {
+        let n = (UserDefaults.standard.string(forKey: Keys.name(slot.uid)) ?? "").trimmingCharacters(in: .whitespaces)
+        if !n.isEmpty { return n }
+        let k = kind(of: slot)
+        return slot.uid == k.id ? k.name : "\(k.name) \(slot.uid.split(separator: "-").last ?? "")"
+    }
+
+    static func accessory(of slot: PetSlotInfo) -> Accessory {
+        Accessory(rawValue: UserDefaults.standard.string(forKey: Keys.accessory(slot.uid)) ?? "") ?? .none
+    }
+
+    func count(of kind: PetKind) -> Int { slots.filter { $0.kindID == kind.id }.count }
+
+    /// Adds another pet; several of the same kind are fine.
+    func add(_ kind: PetKind) {
+        let used = Set(slots.map(\.uid))
+        var uid = kind.id, n = 2
+        while used.contains(uid) { uid = "\(kind.id)-\(n)"; n += 1 }
+        let slot = PetSlotInfo(uid: uid, kindID: kind.id)
+        slots.append(slot)
+        onAdd?(slot)
+        selectedUID = uid
+    }
+
+    func remove(_ uid: String) {
+        guard slots.count > 1 else { return }
+        slots.removeAll { $0.uid == uid }
+        onRemove?(uid)
+        if selectedUID == uid { selectedUID = slots[0].uid }
     }
 
     func reacts(_ key: String) -> Binding<Bool> {
@@ -104,7 +156,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             TabView {
-                PetTab(model: model).tabItem { Text("Pet") }
+                PetTab(model: model).tabItem { Text("Pets") }
                 BehaviorTab(model: model).tabItem { Text("Behavior") }
             }
             HStack {
@@ -114,7 +166,7 @@ struct SettingsView: View {
             }
         }
         .padding(20)
-        .frame(width: 600)
+        .frame(width: 620)
     }
 }
 
@@ -122,26 +174,39 @@ private struct PetTab: View {
     @ObservedObject var model: SettingsModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Your pets").font(.headline)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(model.slots) { slot in
+                        SlotChip(slot: slot, selected: slot.uid == model.selectedUID, canRemove: model.slots.count > 1,
+                                 select: { model.selectedUID = slot.uid }, remove: { model.remove(slot.uid) })
+                    }
+                }
+                .padding(.vertical, 2)
+            }
+
+            Text("Add a pet (as many as you like)").font(.headline)
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 74), spacing: 8)], spacing: 8) {
                 ForEach(PetKind.all, id: \.id) { k in
-                    PetCard(kind: k, selected: model.petID == k.id) { model.petID = k.id }
+                    PetCard(kind: k, count: model.count(of: k)) { model.add(k) }
                 }
             }
 
             TimelineView(.periodic(from: .now, by: 1)) { _ in
-                let level = model.needs?.level ?? 0
+                let needs = model.needsFor(model.selectedUID)
+                let level = needs?.level ?? 0
                 Form {
-                    TextField("Name", text: $model.petName, prompt: Text(model.kind.name))
+                    TextField("Name", text: $model.petName, prompt: Text(model.displayName))
                     LabeledContent("Bond") {
                         HStack {
                             Text("Level \(level)").monospacedDigit().frame(width: 60, alignment: .leading)
-                            ProgressView(value: model.needs?.levelProgress ?? 0)
+                            ProgressView(value: needs?.levelProgress ?? 0)
                         }
                     }
-                    Meter(title: "Full", value: model.needs?.fullness ?? 0, tint: .orange)
-                    Meter(title: "Happy", value: model.needs?.happiness ?? 0, tint: .pink)
-                    Meter(title: "Energy", value: model.needs?.energy ?? 0, tint: .green)
+                    Meter(title: "Full", value: needs?.fullness ?? 0, tint: .orange)
+                    Meter(title: "Happy", value: needs?.happiness ?? 0, tint: .pink)
+                    Meter(title: "Energy", value: needs?.energy ?? 0, tint: .green)
                     LabeledContent("Care") {
                         HStack {
                             Menu("Feed") {
@@ -161,17 +226,45 @@ private struct PetTab: View {
                                 Button(locked ? "🔒 Lv \(a.level)" : a.title) { model.accessory = a }
                                     .disabled(locked)
                                     .buttonStyle(.bordered)
-                                    .tint(model.accessory == a ? .accentColor : nil)
+                                    .tint(model.accessory == a ? Color.accentColor : nil)
                             }
                         }
                         .controlSize(.small)
                     }
                 }
             }
-            Text("Pet it by clicking or rubbing your cursor on it. Feed it, play ball, and your bond grows and unlocks outfits.")
+            Text("Pet them by clicking or rubbing your cursor on them. Feed them, play ball, and your bond grows and unlocks outfits.")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(12)
+    }
+}
+
+/// One of your pets: click to edit it, × to send it away.
+private struct SlotChip: View {
+    let slot: PetSlotInfo
+    let selected: Bool
+    let canRemove: Bool
+    let select: () -> Void
+    let remove: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(decorative: SpriteSheet(kind: SettingsModel.kind(of: slot)).image(.stand, .open), scale: 1)
+                .interpolation(.none).resizable().frame(width: 28, height: 28)
+            Text(SettingsModel.name(of: slot)).font(.system(.callout, design: .rounded).weight(.semibold))
+            if canRemove {
+                Button(action: remove) { Image(systemName: "xmark.circle.fill").foregroundStyle(.secondary) }
+                    .buttonStyle(.plain)
+                    .help("Remove from screen")
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(selected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.05)))
+        .overlay(Capsule().strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 1.5))
+        .contentShape(Capsule())
+        .onTapGesture(perform: select)
     }
 }
 
@@ -238,42 +331,47 @@ private struct BehaviorTab: View {
     }
 }
 
-/// A pet to pick: walks in place while selected.
+/// A kind of pet to add: walks in place while you have at least one.
 private struct PetCard: View {
     let kind: PetKind
-    let selected: Bool
-    let pick: () -> Void
+    let count: Int
+    let add: () -> Void
     private let sheet: SpriteSheet
 
-    init(kind: PetKind, selected: Bool, pick: @escaping () -> Void) {
+    init(kind: PetKind, count: Int, add: @escaping () -> Void) {
         self.kind = kind
-        self.selected = selected
-        self.pick = pick
+        self.count = count
+        self.add = add
         self.sheet = SpriteSheet(kind: kind)
     }
 
     var body: some View {
-        Button(action: pick) {
-            VStack(spacing: 6) {
+        Button(action: add) {
+            VStack(spacing: 4) {
                 TimelineView(.periodic(from: .now, by: 0.18)) { tl in
                     let frame = Int(tl.date.timeIntervalSinceReferenceDate / 0.18) % 2
-                    let pose: Pose = selected ? (frame == 0 ? .walkA : .walkB) : .stand
-                    Image(decorative: sheet.image(pose, selected ? .open : .closed), scale: 1)
+                    let pose: Pose = count > 0 ? (frame == 0 ? .walkA : .walkB) : .stand
+                    Image(decorative: sheet.image(pose, .open), scale: 1)
                         .interpolation(.none)
                         .resizable()
-                        .frame(width: 56, height: 56)
+                        .frame(width: 44, height: 44)
                 }
-                Text(kind.name).font(.system(.body, design: .rounded).weight(.bold))
-                Text("the \(kind.species)").font(.caption).foregroundStyle(.secondary)
-                Text(kind.trait).font(.caption2).foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center).lineLimit(2, reservesSpace: true)
-                    .fixedSize(horizontal: false, vertical: true)
+                Text(kind.name).font(.system(.caption, design: .rounded).weight(.bold))
+                Text(kind.species).font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
-            .padding(8)
+            .padding(6)
             .frame(maxWidth: .infinity)
-            .background(RoundedRectangle(cornerRadius: 12).fill(selected ? Color.accentColor.opacity(0.15) : Color.primary.opacity(0.04)))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Color.accentColor : .clear, lineWidth: 2))
-            .contentShape(RoundedRectangle(cornerRadius: 12))
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.primary.opacity(0.04)))
+            .overlay(alignment: .topTrailing) {
+                Text(count > 0 ? "×\(count)" : "+")
+                    .font(.caption2.weight(.bold)).monospacedDigit()
+                    .padding(.horizontal, 5).padding(.vertical, 1)
+                    .background(Capsule().fill(count > 0 ? Color.accentColor : Color.secondary.opacity(0.3)))
+                    .foregroundStyle(.white)
+                    .padding(4)
+            }
+            .help(kind.trait)
+            .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
     }

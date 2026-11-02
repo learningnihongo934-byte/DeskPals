@@ -5,7 +5,7 @@ import IOKit.ps
 import IOKit.pwr_mgt
 
 enum Keys {
-    static let pet = "pet", scale = "scale"
+    static let pet = "pet", pets = "pets", scale = "scale"
     static let windows = "react.windows", clicks = "react.clicks", typing = "react.typing", idle = "react.idle"
     static let video = "react.video", music = "react.music", battery = "react.battery", dock = "react.dock"
     static let ledges = "react.ledges"
@@ -19,7 +19,10 @@ enum Keys {
 /// idle time comes from the system's seconds-since-last-input counter, videos are noticed because an
 /// app is keeping the screen awake, and music because the speakers are in use.
 final class Senses {
-    private let pet: Pet
+    private let allPets: () -> [Pet]
+    private var pets: [Pet] { allPets() }
+    /// One pet to react, preferring one that's free to.
+    private var onePet: Pet? { pets.filter(\.isCalm).randomElement() ?? pets.randomElement() }
     private let world: World
     private let me = ProcessInfo.processInfo.processIdentifier
     private let d = UserDefaults.standard
@@ -44,8 +47,8 @@ final class Senses {
 
     static let videoHelpers = ["helper", "webkit", "gpu", "renderer", "plugin", "video"]
 
-    init(pet: Pet, world: World) {
-        self.pet = pet
+    init(pets: @escaping () -> [Pet], world: World) {
+        self.allPets = pets
         self.world = world
     }
 
@@ -66,18 +69,19 @@ final class Senses {
             guard let self, Senses.on(Keys.windows),
                   let app = n.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication,
                   app.processIdentifier != self.me, app.activationPolicy == .regular else { return }
-            self.pet.appLaunched(name: app.localizedName ?? "")
+            self.onePet?.appLaunched(name: app.localizedName ?? "")
         }
         nc.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
-            self?.pet.spaceChanged()
+            self?.pets.forEach { $0.spaceChanged() }
         }
         nc.addObserver(forName: NSWorkspace.screensDidWakeNotification, object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
-            if self.pet.isAsleep { self.pet.wake("hi again!") } else { self.pet.remark("hi again!", hop: true) }
+            self.pets.filter(\.isAsleep).forEach { $0.wake("hi again!") }
+            self.onePet?.remark("hi again!", hop: true)
         }
         if let m = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown, handler: { [weak self] _ in
             guard Senses.on(Keys.clicks) else { return }
-            self?.pet.noticeClick(NSEvent.mouseLocation)
+            self?.pets.forEach { $0.noticeClick(NSEvent.mouseLocation) }
         }) { monitors.append(m) }
         refreshDock()
         battery = Self.batteryState()
@@ -85,7 +89,7 @@ final class Senses {
 
     private func activated(_ app: NSRunningApplication) {
         guard app.processIdentifier != me else { return }
-        pet.appSwitched(to: app.processIdentifier)
+        pets.forEach { $0.appSwitched(to: app.processIdentifier) }
         guard Senses.on(Keys.windows), let id = app.bundleIdentifier else { return }
         let name = app.localizedName ?? "that"
 
@@ -94,21 +98,21 @@ final class Senses {
         counts[id, default: 0] += 1
         d.set(counts, forKey: "appCounts")
         if let top = counts.max(by: { $0.value < $1.value }), top.key == id, top.value > 30, Double.random(in: 0..<1) < 0.08 {
-            pet.remark("\(name) again?")
+            onePet?.remark("\(name) again?")
             return
         }
 
         guard clock - lastAppReact > 20, clock - (appCooldown[id] ?? -1e9) > 600 else { return }
         lastAppReact = clock
         appCooldown[id] = clock
-        pet.reactToApp(id, name: name)
+        onePet?.reactToApp(id, name: name)
     }
 
     /// Several windows at once means a Space switch, not something worth a look.
     func newWindows(_ ids: [Int]) {
         guard Senses.on(Keys.windows), !ids.isEmpty, ids.count <= 2, clock - lastWindowReact > 4 else { return }
         lastWindowReact = clock
-        pet.noticeWindow(ids[0])
+        pets.forEach { $0.noticeWindow(ids[0]) }
     }
 
     func tick(_ dt: Double) {
@@ -124,7 +128,8 @@ final class Senses {
         if slowClock >= 1 {
             slowClock = 0
             slowTicks += 1
-            pet.musicPlaying = Senses.on(Keys.music) && videoSeen == 0 && Self.audioPlaying()
+            let music = Senses.on(Keys.music) && videoSeen == 0 && Self.audioPlaying()
+            pets.forEach { $0.musicPlaying = music }
             if slowTicks % 2 == 0 { checkVideo() }
             if slowTicks % 3 == 0 { refreshDock() }
             refreshLedges()
@@ -144,46 +149,50 @@ final class Senses {
     private func typing(_ active: Bool) {
         typingHistory.append(active)
         if typingHistory.count > 24 { typingHistory.removeFirst() }   // last 6 seconds
-        guard Senses.on(Keys.typing) else { pet.speedBoost = 1; return }
+        guard Senses.on(Keys.typing) else { pets.forEach { $0.speedBoost = 1 }; return }
         let level = Double(typingHistory.filter { $0 }.count) / 24
-        pet.speedBoost = 1 + CGFloat(level) * 0.8
+        pets.forEach { $0.speedBoost = 1 + CGFloat(level) * 0.8 }
         if level > 0.45 {
             typingRun += 0.25
             if typingRun > 8, clock - lastBurst > 15 {
                 lastBurst = clock
-                pet.typingBurst()
+                pets.forEach { $0.typingBurst() }
             }
         } else if level == 0 {
-            if typingRun > 25 { pet.typingStopped() }
+            if typingRun > 25 { pets.forEach { $0.typingStopped() } }
             typingRun = 0
         }
     }
 
     private func idleAndTime(_ idle: Double) {
         guard Senses.on(Keys.idle) else {
-            if pet.isAsleep { pet.wake("!") }
+            pets.filter(\.isAsleep).forEach { $0.wake("!") }
             return
         }
         let hour = Calendar.current.component(.hour, from: Date())
         let night = hour >= 23 || hour < 5
-        let tired = pet.needs.energy < 0.2 ? 0.5 : 1
-        let limit = Self.sleepAfter * (night ? 0.4 : 1) * tired / pet.kind.sleepiness
-        if pet.isAsleep {
-            guard idle < 1 else { return }
-            let away = sleptAt.map { Date().timeIntervalSince($0) + limit } ?? 0
-            if away > 1200 && (5..<12).contains(hour) {
-                pet.wake("morning!")
-            } else if away > 1200 {
-                pet.wake("welcome back!")
-            } else {
-                pet.wake(pet.kind.sound)
+        if idle < 1, pets.contains(where: \.isAsleep) {
+            let away = sleptAt.map { Date().timeIntervalSince($0) + Self.sleepAfter } ?? 0
+            for p in pets where p.isAsleep {
+                if away > 1200 && (5..<12).contains(hour) {
+                    p.wake("morning!")
+                } else if away > 1200 {
+                    p.wake("welcome back!")
+                } else {
+                    p.wake(p.kind.sound)
+                }
             }
             sleptAt = nil
-        } else if idle > limit, videoSeen == 0 {
-            if pet.fallAsleep() { sleptAt = Date() }
-        } else if night, idle < 5, clock - lastYawn > 300 {
+            return
+        }
+        for p in pets where !p.isAsleep && videoSeen == 0 {
+            let tired = p.needs.energy < 0.2 ? 0.5 : 1
+            let limit = Self.sleepAfter * (night ? 0.4 : 1) * tired / p.kind.sleepiness
+            if idle > limit, p.fallAsleep(), sleptAt == nil { sleptAt = Date() }
+        }
+        if night, idle < 5, clock - lastYawn > 300 {
             lastYawn = clock
-            pet.yawn()
+            onePet?.yawn()
         }
     }
 
@@ -192,20 +201,27 @@ final class Senses {
     private func checkVideo() {
         guard Senses.on(Keys.video) else {
             videoSeen = 0
-            if pet.isWatching { pet.stopWatching(nil) }
+            pets.forEach { $0.stopWatching(nil) }
             return
         }
         if let win = videoWindow() {
             videoGone = 0
             videoSeen += 2
-            if !pet.isWatching, videoSeen >= 2 { _ = pet.startWatching(win) }
+            if videoSeen >= 2 {
+                // Everyone gets their own seat, spread along the bottom of the video.
+                let all = pets
+                for (i, p) in all.enumerated() where !p.isWatching {
+                    let seat = all.count == 1 ? 0.8 : 0.2 + 0.72 * (CGFloat(i) + 0.5) / CGFloat(all.count)
+                    _ = p.startWatching(win, seat: seat)
+                }
+            }
         } else {
             videoSeen = 0
-            guard pet.isWatching else { return }
+            guard pets.contains(where: \.isWatching) else { return }
             videoGone += 2
             if videoGone >= 4 {
                 videoGone = 0
-                pet.stopWatching(["that was good!", "the end!", "again?", "*claps*"].randomElement())
+                pets.forEach { $0.stopWatching(["that was good!", "the end!", "again?", "*claps*"].randomElement()) }
             }
         }
     }
@@ -302,12 +318,12 @@ final class Senses {
         defer { battery = now }
         guard let before = battery else { return }
         if now.charging, !before.charging {
-            pet.pluggedIn()
+            onePet?.pluggedIn()
         } else if now.charging, now.percent >= 100, before.percent < 100 {
-            pet.remark("100%!", hop: true)
+            onePet?.remark("100%!", hop: true)
         } else if !now.charging, now.percent <= 15, clock - lastBatteryNag > 900 {
             lastBatteryNag = clock
-            pet.batteryLow()
+            onePet?.batteryLow()
         }
     }
 
@@ -326,19 +342,19 @@ final class Senses {
             let days = d.integer(forKey: "daysTogether") + 1
             d.set(days, forKey: "daysTogether")
             d.set(today, forKey: "lastDay")
-            pet.remark(days == 1 ? "nice to meet you!" : "day \(days) together!", hop: true)
+            pets.forEach { $0.remark(days == 1 ? "nice to meet you!" : "day \(days) together!", hop: true) }
             return
         }
 
         let hour = cal.component(.hour, from: now)
         if (1..<5).contains(hour), clock - lastNag > 1800 {
             lastNag = clock
-            pet.remark(["go to sleep!", "it's so late…", "bedtime?"].randomElement()!)
+            onePet?.remark(["go to sleep!", "it's so late…", "bedtime?"].randomElement()!)
             return
         }
-        if pet.t - pet.lastInteraction > 1500, clock - lastBored > 1200 {
+        if clock - lastBored > 1200, let p = pets.filter({ $0.t - $0.lastInteraction > 1500 }).randomElement() {
             lastBored = clock
-            pet.bored()
+            p.bored()
         }
     }
 }
