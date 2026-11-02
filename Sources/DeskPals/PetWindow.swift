@@ -26,9 +26,14 @@ final class PetWindow: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
 
+    /// Room around the pet for hats, speech bubbles, particles and climbing sideways.
+    var margin: CGFloat { pet.size * 0.7 + 10 }
+
     func sync() {
-        let w = max(pet.size + 40, 210), h = pet.size * 1.3 + 60
-        setFrame(CGRect(x: (pet.pos.x - w / 2).rounded(), y: pet.pos.y.rounded(), width: w, height: h), display: false)
+        let w = max(pet.size * 3.4, 340), h = pet.size * 2.4 + 110
+        let origin = CGPoint(x: (pet.pos.x - w / 2).rounded(), y: (pet.pos.y - margin).rounded())
+        setFrame(CGRect(origin: origin, size: CGSize(width: w, height: h)), display: false)
+        petView.feet = CGPoint(x: pet.pos.x - origin.x, y: pet.pos.y - origin.y)
         petView.needsDisplay = true
         let wantsMouse = pet.isDragged || pet.bodyRect.contains(NSEvent.mouseLocation)
         if ignoresMouseEvents == wantsMouse { ignoresMouseEvents = !wantsMouse }
@@ -37,6 +42,7 @@ final class PetWindow: NSPanel {
 
 final class PetView: NSView {
     private let pet: Pet
+    var feet = CGPoint.zero
 
     init(pet: Pet) {
         self.pet = pet
@@ -46,21 +52,69 @@ final class PetView: NSView {
     required init?(coder: NSCoder) { fatalError("not used") }
 
     override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
-    override func mouseDown(with event: NSEvent) { pet.beginDrag(NSEvent.mouseLocation) }
+    override func mouseDown(with event: NSEvent) {
+        if event.clickCount == 2 { pet.superJump() } else { pet.beginDrag(NSEvent.mouseLocation) }
+    }
     override func mouseDragged(with event: NSEvent) { pet.drag(NSEvent.mouseLocation) }
     override func mouseUp(with event: NSEvent) { pet.endDrag(NSEvent.mouseLocation) }
 
     override func draw(_ dirtyRect: NSRect) {
-        guard let ctx = NSGraphicsContext.current?.cgContext else { return }
+        guard let ctx = NSGraphicsContext.current?.cgContext, let window else { return }
         ctx.interpolationQuality = .none
-        let l = pet.look(), s = pet.size
-        ctx.saveGState()
-        ctx.translateBy(x: bounds.midX, y: l.lift * pet.scale)
-        ctx.rotate(by: l.rot)
-        ctx.scaleBy(x: (l.flip ? -1 : 1) * l.sx, y: l.sy)
-        ctx.draw(pet.sheet.image(l.pose, l.eyes), in: CGRect(x: -s / 2, y: 0, width: s, height: s))
-        ctx.restoreGState()
-        if let text = pet.bubble, Senses.on(Keys.bubbles) { drawBubble(text, at: s * l.sy + l.lift * pet.scale + 4) }
+        let l = pet.look(), s = pet.size, px = pet.scale
+
+        if !l.hidden {
+            ctx.saveGState()
+            ctx.translateBy(x: feet.x, y: feet.y + l.lift * px)
+            ctx.rotate(by: l.rot)
+            ctx.scaleBy(x: (l.flip ? -1 : 1) * l.sx, y: l.sy)
+            ctx.draw(pet.sheet.image(l.pose, l.eyes, blush: l.blush, glasses: l.glasses), in: CGRect(x: -s / 2, y: 0, width: s, height: s))
+            if l.eyes == .love, l.pose != .back, l.pose != .sleep { drawHeartEyes(ctx, pose: l.pose) }
+            drawAccessory(ctx, pose: l.pose)
+            ctx.restoreGState()
+            if l.popcorn {
+                let img = SpriteSheet.popcorn
+                ctx.draw(img, in: CGRect(x: feet.x + s * 0.35, y: feet.y, width: CGFloat(img.width) * px, height: CGFloat(img.height) * px))
+            }
+        }
+
+        let origin = window.frame.origin
+        for p in pet.particles {
+            let img = Particle.image(p.kind)
+            let fade = p.kind == .dust || p.kind == .fire ? CGFloat(p.life / p.maxLife) : min(1, CGFloat(p.life / p.maxLife) * 3)
+            ctx.setAlpha(fade)
+            let ppx = px * (p.kind == .heart || p.kind == .note ? 0.8 : 0.7)
+            let w = CGFloat(img.width) * ppx, h = CGFloat(img.height) * ppx
+            ctx.draw(img, in: CGRect(x: p.pos.x - origin.x - w / 2, y: p.pos.y - origin.y - h / 2, width: w, height: h))
+        }
+        ctx.setAlpha(1)
+
+        if !l.hidden, let text = pet.bubble, Senses.on(Keys.bubbles) {
+            drawBubble(text, at: feet.y + s * l.sy + l.lift * px + (pet.accessory.art == nil ? 4 : 4 + 4 * px))
+        }
+    }
+
+    /// Love eyes: a small heart over each eye, at about half the pet's pixel size.
+    private func drawHeartEyes(_ ctx: CGContext, pose: Pose) {
+        let img = SpriteSheet.heartEye
+        let n = CGFloat(SpriteSheet.size), px = pet.scale, s = pet.size
+        let mini = px * 0.62
+        let w = CGFloat(img.width) * mini, h = CGFloat(img.height) * mini
+        let cy = (n - CGFloat(pet.sheet.eyeGridRow(pose)) - 1) * px
+        for cx in pet.sheet.eyeCenters {
+            ctx.draw(img, in: CGRect(x: -s / 2 + cx * px - w / 2, y: cy - h / 2, width: w, height: h))
+        }
+    }
+
+    /// Hats sit on top of the head and move with every squash, flip and spin.
+    private func drawAccessory(_ ctx: CGContext, pose: Pose) {
+        guard let art = pet.accessory.art, let img = SpriteSheet.accessoryImage(pet.accessory) else { return }
+        let n = CGFloat(SpriteSheet.size), px = pet.scale, s = pet.size
+        let bottomRow = CGFloat(pet.sheet.eyeGridRow(pose) - 2 - art.lift)
+        let w = CGFloat(img.width), h = CGFloat(img.height)
+        let x = -s / 2 + (pet.sheet.eyeCenterX + CGFloat(art.dx) - w / 2) * px
+        let y = (n - 1 - bottomRow) * px
+        ctx.draw(img, in: CGRect(x: x, y: y, width: w * px, height: h * px))
     }
 
     private func drawBubble(_ text: String, at y: CGFloat) {
@@ -71,7 +125,7 @@ final class PetView: NSView {
         let str = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: ink])
         let ts = str.size()
         let pad: CGFloat = 6
-        let r = CGRect(x: bounds.midX - ts.width / 2 - pad, y: y, width: ts.width + pad * 2, height: ts.height + 4)
+        let r = CGRect(x: feet.x - ts.width / 2 - pad, y: y, width: ts.width + pad * 2, height: ts.height + 4)
         let path = NSBezierPath(roundedRect: r, xRadius: r.height / 2, yRadius: r.height / 2)
         NSColor.white.setFill()
         path.fill()

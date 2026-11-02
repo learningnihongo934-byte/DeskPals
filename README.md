@@ -1,33 +1,74 @@
 # DeskPals
 
-A tiny pixel pet that lives on your Mac desktop. It walks along the tops of your windows,
-rides them when you drag them around, and reacts to what you do.
-
-Pick one of four pets from the menu bar:
+A tiny pixel pet that lives on your Mac. It walks on your windows and your Dock, watches videos with you,
+gets hungry, plays ball, and reacts to almost everything you do.
 
 | Pet | Personality |
 | --- | --- |
-| **Mochi** the cat | Curious, chases your clicks, naps a lot |
-| **Gloop** the slime | Slow and bouncy, jumps when you click near it |
-| **Ember** the fox | Fast, always checks out new windows |
-| **Pip** the dragon | Jumpy, glides down instead of falling |
+| **Mochi** the cat | Chases clicks and pounces at your cursor, climbs walls, loves fish |
+| **Gloop** the slime | Slow, very bouncy, follows your cursor around, loves berries |
+| **Ember** the fox | Fast, nosy about new windows, gets the zoomies, loves cookies |
+| **Pip** the dragon | Jumpy, glides and flaps instead of falling, puffs fire, loves peppers |
 
-## What it reacts to
+You can rename your pet in Settings.
 
-- **New windows and apps**: hops onto a window that just opened to take a look, dances when a music app comes to the front.
-- **Mouse clicks**: chases or startles at clicks. Click a lot in a row and it gets dizzy.
-- **Typing**: speeds up and cheers while you type, says "phew" after a long typing session.
-- **Idle and time of day**: falls asleep when you step away, wakes up when you're back, says good morning, yawns late at night.
-- **You**: click it to pet it, drag it to pick it up, and fling it to throw it.
+## Physics and movement
+
+- Walks along the visible tops of windows and rides them when you drag them
+- Gets flung off if you throw a window around too fast
+- Hangs off window ledges, then pulls itself up or drops
+- Climbs up the sides of the screen (cat and fox), and grabs the wall when you throw it there
+- Throw it: it spins, bounces (the slime most of all) and slides when it lands
+- The Dock is a trampoline
+- Shake it while you hold it and it gets dizzy; it swings like a pendulum while you carry it
+- Double-click it for a super jump with a flip
+- Hops up onto higher ledges as it walks, and drops to the ground when you switch apps or Spaces
+- Dust puffs, sparkles and other particles
+
+## Videos, music and apps
+
+- **Watches videos with you:** it sits at the bottom of the video window with its back to you and a bucket of popcorn, reacts now and then, and dozes off during long ones
+- Dances and bobs to music, with little notes
+- Walks on your **Dock icons**, hops from icon to icon, says hi to apps you open, and says "eww" at the Trash
+- Drop it on the Trash and it pops out angry
+- Reacts to Xcode, VS Code, Terminal, Claude, Roblox, Mail, Finder, FaceTime, Photo Booth, the App Store, Activity Monitor and more (and gets jealous of ChatGPT)
+- Notices low battery, plugging in and a full charge
+- Says hi when your screen wakes up
+
+## Needs and care
+
+- Hunger, happiness and energy, saved between launches
+- Feed it fish, berries, cookies or peppers; each pet has a favorite
+- Throw a ball and it chases and kicks it around
+- Place a bed and it goes there to sleep
+- Pet it by clicking it or rubbing your cursor on it
+- Your bond grows into levels that unlock a bow, a party hat, sunglasses, a Santa hat and a crown
+- Very happy pets sometimes bring you gifts
+- Throw it around too much and it sulks
+
+## Moods and personality
+
+- Sits, grooms, stretches, sneezes, looks around and chats
+- Eyes follow your cursor, plus happy, sad, angry, dizzy and heart eyes, and blushing
+- Gets the zoomies when it's happy
+- Falls asleep when you step away, says good morning, and nags you to sleep late at night
+- Counts the days you've been together, notices your favorite app, and asks to play when it's bored
 
 ## Settings
 
-Open DeskPals again (from Finder, Spotlight or Launchpad) or choose **Settings…** in the menu bar to pick your pet,
-change its size, turn each reaction on or off, set how long you're idle before it naps, hide speech bubbles,
-and start DeskPals when you log in.
+Open DeskPals again (from Finder, Spotlight or Launchpad) or choose **Settings…** in the menu bar.
+The **Pet** tab has your pet, its name, its needs, care buttons and outfits.
+The **Behavior** tab has its size, every reaction on its own switch, nap time, speech bubbles and opening at login.
 
-Privacy: DeskPals only reads window positions, click positions and "a key was pressed recently".
-It never reads which keys you press, window titles or anything on screen, and it needs no permissions.
+## Privacy and permissions
+
+DeskPals only reads window positions, click positions, "a key was pressed recently" (never which key),
+whether an app is keeping the screen awake (videos), whether the speakers are in use (music), and the battery level.
+It never reads window titles or anything on screen.
+
+Walking on individual Dock icons needs Accessibility permission, only to find where the icons are.
+Without it, the pet walks on top of the Dock as one long ledge. Because the app is signed locally,
+macOS may ask again after you rebuild it.
 
 ## Build
 
@@ -41,14 +82,15 @@ Needs macOS 13+ and Xcode or the Swift toolchain.
 
 ## Code
 
-- `Pets.swift`: the pets' pixel art (ASCII) and personalities
-- `Sprite.swift`: turns the art into images for each pose and eye style
-- `World.swift`: finds the visible top edges of windows to stand on
-- `Pet.swift`: physics, the behavior state machine and reactions
-- `Senses.swift`: watches windows, apps, clicks, typing and idle time
+- `Pets.swift`: the pets' pixel art, personalities and outfits
+- `Sprite.swift`: turns the art into images for each pose and expression
+- `World.swift`: window tops, the Dock, floors and the bed as places to stand
+- `Pet.swift`: physics, behavior, needs and reactions
+- `Care.swift`: needs, food, the ball, the bed, gifts and particles
+- `Senses.swift`: watches windows, apps, clicks, typing, idle time, videos, music and the battery
 - `PetWindow.swift`: the click-through window the pet is drawn in
 - `Settings.swift`: the Settings window and saved preferences
-- `Icon.swift`: draws the app icon (built into `AppIcon.icns` by `build.sh`)
+- `Icon.swift`: draws the app icon
 - `AppDelegate.swift`: menu bar and the 60 fps loop
 
 Made by **Virat Reddy Kaukuntla** ([@learningnihongo934-byte](https://github.com/learningnihongo934-byte))
