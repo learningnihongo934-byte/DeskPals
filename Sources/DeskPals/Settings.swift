@@ -33,6 +33,11 @@ final class SettingsModel: ObservableObject {
     var onBed: (() -> Void)?
     var hasBed: () -> Bool = { false }
     var needsFor: (String) -> Needs? = { _ in nil }
+    var onPlace: ((Place) -> Void)?
+    var hasPlace: (Place) -> Bool = { _ in false }
+    var onGame: ((MiniGames.Kind) -> Void)?
+    var onPower: (() -> Void)?
+    var env: Environment?
 
     @Published private(set) var slots: [PetSlotInfo] {
         didSet { d.set(slots.map { ["uid": $0.uid, "kind": $0.kindID] }, forKey: Keys.pets) }
@@ -57,6 +62,10 @@ final class SettingsModel: ObservableObject {
         didSet { reacts.forEach { d.set($0.value, forKey: $0.key) }; onReactionsChanged?() }
     }
     @Published var bubbles: Bool { didSet { d.set(bubbles, forKey: Keys.bubbles) } }
+    /// 0 calm ... 1 chaotic
+    @Published var chaos: Double { didSet { d.set(chaos, forKey: "chaos"); Pet.chaos = chaos } }
+    /// Bumped to make views re-read things that live elsewhere (coins, weather, shop).
+    @Published var tick = 0
     @Published var sleepMinutes: Double { didSet { d.set(sleepMinutes * 60, forKey: Keys.sleepAfter) } }
     @Published var launchAtLogin: Bool {
         didSet {
@@ -89,6 +98,7 @@ final class SettingsModel: ObservableObject {
         scale = saved > 0 ? saved : 4
         reacts = Dictionary(uniqueKeysWithValues: Self.reactions.map { ($0.key, Senses.on($0.key)) })
         bubbles = Senses.on(Keys.bubbles)
+        chaos = ud.object(forKey: "chaos") as? Double ?? 0.4
         sleepMinutes = Senses.sleepAfter / 60
         launchAtLogin = SMAppService.mainApp.status == .enabled
     }
@@ -157,10 +167,17 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 14) {
             TabView {
                 PetTab(model: model).tabItem { Text("Pets") }
+                WorldTab(model: model).tabItem { Text("World") }
+                ShopTab(model: model).tabItem { Text("Shop") }
+                GoalsTab(model: model).tabItem { Text("Goals & games") }
                 BehaviorTab(model: model).tabItem { Text("Behavior") }
             }
             HStack {
                 Button("Call \(model.displayName) here") { model.onCall?() }
+                Spacer()
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    Text("🪙 \(Economy.shared.coins)").font(.system(.body, design: .rounded).weight(.bold)).monospacedDigit()
+                }
                 Spacer()
                 Button("Quit DeskPals") { NSApp.terminate(nil) }
             }
@@ -201,6 +218,7 @@ private struct PetTab: View {
                     LabeledContent("Bond") {
                         HStack {
                             Text("Level \(level)").monospacedDigit().frame(width: 60, alignment: .leading)
+                            Text(["Baby", "Kid", "Grown-up"][min(needs?.stage ?? 2, 2)]).foregroundStyle(.secondary).frame(width: 70, alignment: .leading)
                             ProgressView(value: needs?.levelProgress ?? 0)
                         }
                     }
@@ -217,11 +235,12 @@ private struct PetTab: View {
                             .fixedSize()
                             Button("Throw a ball") { model.onBall?() }
                             Button(model.hasBed() ? "Remove bed" : "Place a bed") { model.onBed?() }
+                            Button("Power up ⚡") { model.onPower?() }
                         }
                     }
                     LabeledContent("Wears") {
                         HStack(spacing: 6) {
-                            ForEach(Accessory.allCases, id: \.self) { a in
+                            ForEach(Accessory.allCases.filter { a in a.shopID.map { Economy.shared.owned.contains($0) } ?? true }, id: \.self) { a in
                                 let locked = a.level > level
                                 Button(locked ? "🔒 Lv \(a.level)" : a.title) { model.accessory = a }
                                     .disabled(locked)
@@ -324,6 +343,20 @@ private struct BehaviorTab: View {
             }
             .disabled(model.reacts[Keys.idle] == false)
 
+            LabeledContent("Personality") {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack {
+                        Text("Calm").font(.caption)
+                        Slider(value: $model.chaos, in: 0...1)
+                        Text("Chaotic").font(.caption)
+                    }
+                    Text(model.chaos > 0.85 ? "Full chaos: they push each other, knock things over and tug your cursor."
+                         : model.chaos > 0.6 ? "Mischief: they push each other off ledges and knock things over."
+                         : model.chaos < 0.25 ? "Calm: they mostly rest and stay quiet." : "Balanced.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+            }
+            SoundControls()
             Toggle("Show speech bubbles", isOn: $model.bubbles)
             Toggle("Open DeskPals when I log in", isOn: $model.launchAtLogin)
         }
@@ -374,5 +407,175 @@ private struct PetCard: View {
             .contentShape(RoundedRectangle(cornerRadius: 10))
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct SoundControls: View {
+    @State private var effects = Sound.shared.effectsOn
+    @State private var volume = Double(Sound.shared.volume)
+
+    var body: some View {
+        LabeledContent("Sound") {
+            VStack(alignment: .leading, spacing: 4) {
+                Toggle("Sound effects", isOn: $effects).onChange(of: effects) { Sound.shared.effectsOn = $0 }
+                HStack {
+                    Image(systemName: "speaker.fill").foregroundStyle(.secondary)
+                    Slider(value: $volume, in: 0...1).onChange(of: volume) { Sound.shared.volume = Float($0) }
+                }
+            }
+        }
+    }
+}
+
+private struct WorldTab: View {
+    @ObservedObject var model: SettingsModel
+    @State private var city = ""
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            Form {
+                if let env = model.env {
+                    LabeledContent("World") {
+                        HStack(spacing: 6) {
+                            ForEach(Theme.allCases, id: \.self) { th in
+                                let owned = th.shopID.map { Economy.shared.owned.contains($0) } ?? true
+                                Button(owned ? th.title : "🔒 \(th.title)") { env.theme = th; model.tick += 1 }
+                                    .disabled(!owned)
+                                    .buttonStyle(.bordered)
+                                    .tint(env.theme == th ? Color.accentColor : nil)
+                            }
+                        }
+                        .controlSize(.small)
+                    }
+                    Picker("Weather", selection: Binding(get: { env.mode }, set: { env.mode = $0; model.tick += 1 })) {
+                        ForEach(Environment.Mode.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    if env.mode == .real {
+                        LabeledContent("City") {
+                            HStack {
+                                TextField("e.g. Austin", text: $city).onSubmit { env.city = city }
+                                Button("Use") { env.city = city }
+                            }
+                        }
+                        Text("Only the city name goes to open-meteo.com to look up the weather.").font(.caption).foregroundStyle(.secondary)
+                    }
+                    Picker("Right now", selection: Binding(get: { env.override?.rawValue ?? "auto" },
+                                                           set: { env.override = WeatherKind(rawValue: $0); model.tick += 1 })) {
+                        Text("Automatic").tag("auto")
+                        ForEach(WeatherKind.allCases, id: \.self) { Text($0.title).tag($0.rawValue) }
+                    }
+                    LabeledContent("Now") { Text(env.summary + (env.holiday != .none ? " · holiday decorations on" : "")).foregroundStyle(.secondary) }
+                }
+                LabeledContent("Places") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Place.allCases, id: \.self) { p in
+                            HStack {
+                                Image(decorative: p.image(), scale: 1).interpolation(.none).resizable().scaledToFit().frame(width: 36, height: 28)
+                                Text(p.title).frame(width: 80, alignment: .leading)
+                                if Economy.shared.owned.contains(p.shopID) {
+                                    Button(model.hasPlace(p) ? "Put away" : "Place on desktop") { model.onPlace?(p); model.tick += 1 }
+                                } else {
+                                    Text("in the Shop").foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                    }
+                }
+                Text("Pets visit places on their own. Drag places anywhere, even onto windows. Your pets also explore the menu bar, hide in the notch and peek out from the screen edges.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            .padding(12)
+            .onAppear { city = model.env?.city ?? "" }
+        }
+    }
+}
+
+private struct ShopTab: View {
+    @ObservedObject var model: SettingsModel
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("🪙 \(Economy.shared.coins) coins").font(.title2.weight(.bold)).monospacedDigit()
+                    Text("Earn coins by petting, feeding and playing, daily quests, mini-games and achievements.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    ForEach(ShopItem.Category.allCases, id: \.self) { cat in
+                        Text(cat.rawValue).font(.headline)
+                        ForEach(ShopItem.all.filter { $0.category == cat }) { item in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(item.title).fontWeight(.semibold)
+                                    Text(item.blurb).font(.caption).foregroundStyle(.secondary)
+                                }
+                                Spacer()
+                                if Economy.shared.owns(item) {
+                                    Text("Owned ✓").foregroundStyle(.green)
+                                } else {
+                                    Button("Buy  🪙 \(item.price)") {
+                                        if Economy.shared.buy(item) { Sound.shared.play(.coin); model.tick += 1 }
+                                    }
+                                    .disabled(Economy.shared.coins < item.price)
+                                }
+                            }
+                            Divider()
+                        }
+                    }
+                }
+                .padding(12)
+            }
+            .frame(height: 460)
+        }
+    }
+}
+
+private struct GoalsTab: View {
+    @ObservedObject var model: SettingsModel
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 1)) { _ in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Today's quests").font(.headline)
+                    ForEach(Array(Economy.shared.quests.enumerated()), id: \.offset) { _, q in
+                        HStack {
+                            Image(systemName: q.done ? "checkmark.circle.fill" : "circle").foregroundStyle(q.done ? .green : .secondary)
+                            Text(q.title)
+                            Spacer()
+                            ProgressView(value: Double(min(q.progress, q.target)), total: Double(q.target)).frame(width: 90)
+                            Text("🪙 \(q.reward)").monospacedDigit().frame(width: 50, alignment: .trailing)
+                        }
+                    }
+                    Text("Mini-games").font(.headline).padding(.top, 6)
+                    ForEach(MiniGames.Kind.allCases, id: \.self) { g in
+                        HStack(alignment: .top) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(g.title).fontWeight(.semibold)
+                                Text(g.how).font(.caption).foregroundStyle(.secondary)
+                                if MiniGames.best(g) > 0 { Text("Best: \(MiniGames.best(g))").font(.caption2).foregroundStyle(.secondary) }
+                            }
+                            Spacer()
+                            Button("Play with \(model.displayName)") { model.onGame?(g) }
+                        }
+                    }
+                    Text("Achievements").font(.headline).padding(.top, 6)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 170), spacing: 8)], spacing: 8) {
+                        ForEach(Economy.achievements, id: \.id) { a in
+                            let done = Economy.shared.achieved.contains(a.id)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text((done ? "🏆 " : "🔒 ") + a.title).fontWeight(.semibold)
+                                Text(a.detail).font(.caption).foregroundStyle(.secondary)
+                            }
+                            .padding(8)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(done ? Color.yellow.opacity(0.15) : Color.primary.opacity(0.04)))
+                        }
+                    }
+                }
+                .padding(12)
+            }
+            .frame(height: 460)
+        }
     }
 }

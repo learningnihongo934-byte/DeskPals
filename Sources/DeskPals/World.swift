@@ -34,6 +34,8 @@ struct DockInfo {
 /// Only window bounds are read (no titles or contents), so no Screen Recording permission is needed.
 final class World {
     static let dockID = -1000
+    /// Lower in the Space world.
+    static var gravityScale = 1.0
 
     private(set) var platforms: [Platform] = []
     private(set) var windows: [WindowInfo] = []
@@ -165,6 +167,13 @@ final class World {
 
     func screenFrame(at x: CGFloat) -> CGRect {
         NSScreen.screens.first { $0.frame.minX <= x && x < $0.frame.maxX }?.frame ?? bounds
+    }
+
+    /// The camera notch on this screen, if it has one.
+    func notch(at x: CGFloat) -> CGRect? {
+        guard let s = NSScreen.screens.first(where: { $0.frame.minX <= x && x < $0.frame.maxX }),
+              let l = s.auxiliaryTopLeftArea, let r = s.auxiliaryTopRightArea, r.minX > l.maxX else { return nil }
+        return CGRect(x: l.maxX, y: l.minY, width: r.minX - l.maxX, height: l.height)
     }
 
     func screenTop(at x: CGFloat) -> CGFloat {

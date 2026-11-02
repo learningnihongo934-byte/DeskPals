@@ -35,6 +35,23 @@ enum CustomPets {
         let special: String?
         let backHair: [Int]?
         let shout: String?
+        let power: String?
+        let aura: String?
+        let auraText: String?
+        let powerShout: String?
+        let transformArt: [String]?
+        let transformPalette: [String: String]?
+        let transformScale: Double?
+        let rival: String?
+        let rivalLines: [String]?
+        let winLines: [String]?
+        let loseLines: [String]?
+        let watchLines: [String]?
+        let projectile: String?
+        let dropArt: [String]?
+        let dropPalette: [String: String]?
+        let dropShout: String?
+        let startsGrown: Bool?
     }
 
     static func load() -> [PetKind] {
@@ -50,13 +67,17 @@ enum CustomPets {
         }
     }
 
+    private static func hex(_ v: String) -> UInt32? { UInt32(v.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) }
+
+    private static func colors(_ d: [String: String]) -> [Character: UInt32] {
+        var out: [Character: UInt32] = [:]
+        for (k, v) in d { if let ch = k.first, let rgb = hex(v) { out[ch] = rgb } }
+        return out
+    }
+
     private static func kind(from f: File) -> PetKind {
-        var palette: [Character: UInt32] = [:]
-        for (k, v) in f.palette {
-            guard let ch = k.first, let rgb = UInt32(v.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) else { continue }
-            palette[ch] = rgb
-        }
-        return PetKind(
+        let palette = colors(f.palette)
+        var kind = PetKind(
             id: f.id, name: f.name, species: f.species ?? "pal", sound: f.sound ?? "!", trait: f.trait ?? "",
             art: f.art, mirrored: f.mirrored ?? false, legs: f.legs ?? [], palette: palette,
             walkSpeed: CGFloat(f.walkSpeed ?? 20), jumpiness: f.jumpiness ?? 0.2, curiosity: f.curiosity ?? 0.6,
@@ -65,5 +86,23 @@ enum CustomPets {
             climbs: f.climbs ?? false, clingy: f.clingy ?? false, favorite: Food(rawValue: f.favorite ?? "") ?? .cookie,
             phrases: f.phrases ?? [f.sound ?? "!"], special: Special(rawValue: f.special ?? "") ?? .none,
             backHair: f.backHair ?? [], shout: f.shout)
+        kind.power = f.power.flatMap(Special.init(rawValue:))
+        kind.aura = f.aura.flatMap(hex)
+        kind.auraText = f.auraText
+        kind.powerShout = f.powerShout
+        kind.transformArt = f.transformArt
+        kind.transformPalette = f.transformPalette.map(colors)
+        kind.transformScale = CGFloat(f.transformScale ?? 2.5)
+        kind.rival = f.rival
+        kind.rivalLines = f.rivalLines ?? []
+        kind.winLines = f.winLines ?? []
+        kind.loseLines = f.loseLines ?? []
+        kind.watchLines = f.watchLines ?? []
+        kind.projectile = f.projectile
+        kind.dropArt = f.dropArt
+        kind.dropPalette = f.dropPalette.map(colors) ?? [:]
+        kind.dropShout = f.dropShout
+        kind.startsGrown = f.startsGrown ?? false
+        return kind
     }
 }

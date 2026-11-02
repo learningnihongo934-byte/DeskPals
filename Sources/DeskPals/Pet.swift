@@ -22,6 +22,22 @@ final class Pet {
         case zoomies(laps: Int)
         case sulk(until: Double)
         case trashed(until: Double)
+        // places around the Mac
+        case ceiling(dir: CGFloat, until: Double)
+        case peek(side: CGFloat, start: Double)
+        case hidden(until: Double)
+        // places on the desktop
+        case swinging(prop: Int, until: Double)
+        case sliding(prop: Int, progress: Double)
+        case fishing(prop: Int, until: Double)
+        case inside(prop: Int, until: Double)
+        // mini-games
+        case game
+        // power moves
+        case powerUp(until: Double, move: Special)
+        case dash(until: Double, dir: CGFloat)
+        case pose(until: Double)
+        case hiding(window: Int, until: Double)
     }
 
     struct Look {
@@ -35,13 +51,17 @@ final class Pet {
         var glasses = false
         var hidden = false
         var popcorn = false
+        var umbrella = false
+        var aura: CGFloat = 0
     }
 
     static let gravity = 2600.0
+    /// 0 = calm, 1 = chaotic. Set from Settings.
+    static var chaos = 0.4
     static let musicApps: Set<String> = ["com.spotify.client", "com.apple.Music", "com.apple.iTunes"]
 
-    private(set) var kind: PetKind
-    private(set) var sheet: SpriteSheet
+    var kind: PetKind
+    var sheet: SpriteSheet
     var scale: CGFloat
     var name: String
     /// Platform id of the top of this pet's head, so other pets can stand on it.
@@ -49,74 +69,97 @@ final class Pet {
     /// The other pets on screen.
     var friends: () -> [Pet] = { [] }
     var accessory: Accessory = .none
+    /// 0.6 baby, 0.8 kid, 1 grown up.
+    var growth: CGFloat = 1
+    /// Size of one sprite pixel on screen.
+    var px: CGFloat { scale * growth * formScale }
+    var aura: CGFloat = 0
+    var powerCooldown = 0.0
+    var transformedUntil = 0.0
+    var formSheet: SpriteSheet?
+    var formScale: CGFloat = 1
+    var lastStomp = 0.0
+    /// Rival face-offs: aura and floating glyphs without a move.
+    var menacingUntil = 0.0
+    /// What's drawn: the transformed form while it lasts.
+    var drawSheet: SpriteSheet { formSheet ?? sheet }
+    var umbrella = false
+    var shivering = false
+    var onClicked: (() -> Void)?
+    var gameTarget: CGFloat?
+    var watchSecs = 0.0
+    var notchVisited = false
+    var hideOffset: CGFloat = 0
+    /// Set while hiding behind a window in hide & seek; the pet's window goes behind that one.
+    var hidingWindowID: Int?
     let world: World
     let needs: Needs
     let props: Props
 
     var pos = CGPoint(x: 400, y: 400)
-    private var vel = CGVector.zero
-    private var facingRight = true
-    private(set) var state: State = .air
-    private var standingOn: Int?
-    private var groundFrame: CGRect?
-    private var groundMovedAt = 0.0
-    private var jumping = false
-    private var airTime = 0.0
-    private var arcTarget: CGPoint?
-    private(set) var t = 0.0
-    private var squash = 0.0
-    private var happyUntil = 0.0, loveUntil = 0.0, blushUntil = 0.0
-    private var queue: [(at: Double, run: () -> Void)] = []
-    private var onLand: (() -> Void)?
-    private var onArrive: (() -> Void)?
-    private var bubbleText: String?
-    private var bubbleUntil = 0.0
+    var vel = CGVector.zero
+    var facingRight = true
+    var state: State = .air
+    var standingOn: Int?
+    var groundFrame: CGRect?
+    var groundMovedAt = 0.0
+    var jumping = false
+    var airTime = 0.0
+    var arcTarget: CGPoint?
+    var t = 0.0
+    var squash = 0.0
+    var happyUntil = 0.0, loveUntil = 0.0, blushUntil = 0.0
+    var queue: [(at: Double, run: () -> Void)] = []
+    var onLand: (() -> Void)?
+    var onArrive: (() -> Void)?
+    var bubbleText: String?
+    var bubbleUntil = 0.0
     var speedBoost: CGFloat = 1
     var musicPlaying = false
-    private(set) var particles: [Particle] = []
+    var particles: [Particle] = []
 
     // physics extras
-    private var spinAngle: CGFloat = 0, spinVel: CGFloat = 0
-    private var trick = false
-    private var shaken = false
-    private var hangOffset: CGFloat = 0
-    private var zoomCenter: CGFloat = 0
+    var spinAngle: CGFloat = 0, spinVel: CGFloat = 0
+    var trick = false
+    var shaken = false
+    var hangOffset: CGFloat = 0
+    var zoomCenter: CGFloat = 0
 
     // dragging
-    private var dragOffset = CGVector.zero
-    private var dragSamples: [(t: Double, p: CGPoint)] = []
-    private var dragDistance: CGFloat = 0
-    private var dragVX: CGFloat = 0
-    private var dragRot: CGFloat = 0, dragRotVel: CGFloat = 0
-    private var shakeDir = 0
-    private var shakeTimes: [Double] = []
-    private var wasSulking = false
-    private var thrownTimes: [Double] = []
-    private var pettings: [Double] = []
-    private var trashSpot = CGPoint.zero
+    var dragOffset = CGVector.zero
+    var dragSamples: [(t: Double, p: CGPoint)] = []
+    var dragDistance: CGFloat = 0
+    var dragVX: CGFloat = 0
+    var dragRot: CGFloat = 0, dragRotVel: CGFloat = 0
+    var shakeDir = 0
+    var shakeTimes: [Double] = []
+    var wasSulking = false
+    var thrownTimes: [Double] = []
+    var pettings: [Double] = []
+    var trashSpot = CGPoint.zero
 
     // watching videos
-    private var watchSeat: CGFloat = 0.8
-    private var watchSince = 0.0
-    private var nextWatchReact = 0.0
-    private var nextPopcorn = 0.0
-    private var watchDeclinedUntil = 0.0
+    var watchSeat: CGFloat = 0.8
+    var watchSince = 0.0
+    var nextWatchReact = 0.0
+    var nextPopcorn = 0.0
+    var watchDeclinedUntil = 0.0
 
     // cursor, care and chatter
-    private(set) var cursorPos: CGPoint?
-    private var strokeDist: CGFloat = 0
-    private var strokeDir = 0
-    private var strokeFlips = 0
-    private var hoverSince: Double?
-    private var nextWhoosh = 0.0
-    private var clickTimes: [Double] = []
-    private var nextNote = 0.0
-    private var nextCareCheck = 0.0
-    private var nextGift = 1800.0
-    private var nextHungerTalk = 0.0
-    private var complainedAbout = Set<Int>()
-    private var eating: Prop?
-    private(set) var lastInteraction = 0.0
+    var cursorPos: CGPoint?
+    var strokeDist: CGFloat = 0
+    var strokeDir = 0
+    var strokeFlips = 0
+    var hoverSince: Double?
+    var nextWhoosh = 0.0
+    var clickTimes: [Double] = []
+    var nextNote = 0.0
+    var nextCareCheck = 0.0
+    var nextGift = 1800.0
+    var nextHungerTalk = 0.0
+    var complainedAbout = Set<Int>()
+    var eating: Prop?
+    var lastInteraction = 0.0
 
     init(kind: PetKind, scale: CGFloat, name: String, world: World, needs: Needs, props: Props) {
         self.kind = kind
@@ -130,18 +173,24 @@ final class Pet {
 
     // MARK: - Queries
 
-    var size: CGFloat { 16 * scale }
+    var size: CGFloat { 16 * px }
     var bodyRect: CGRect {
-        if case .trashed = state { return .zero }
+        if isHidden { return .zero }
         if case .hang = state { return CGRect(x: pos.x - size / 2, y: pos.y, width: size, height: size) }
         return CGRect(x: pos.x - size / 2, y: pos.y, width: size, height: size)
     }
     var bubble: String? {
-        if case .trashed = state { return nil }
+        if isHidden { return nil }
         if case .sleep = state, bubbleText == nil { return ["z", "zZ", "zZz"][Int(t / 0.8) % 3] }
         return bubbleText
     }
     var isAsleep: Bool { if case .sleep = state { return true }; return false }
+    var isHidden: Bool {
+        switch state {
+        case .trashed, .hidden, .inside: return true
+        default: return false
+        }
+    }
     var isDragged: Bool { if case .dragged = state { return true }; return false }
     var isWatching: Bool { if case .watch = state { return true }; return false }
     var isGrounded: Bool { standingOn != nil }
@@ -152,9 +201,9 @@ final class Pet {
         default: return false
         }
     }
-    private var facing: CGFloat { facingRight ? 1 : -1 }
-    private var head: CGPoint { CGPoint(x: pos.x, y: pos.y + size * 0.85) }
-    private var mouth: CGPoint { CGPoint(x: pos.x + facing * size * 0.38, y: pos.y + size * 0.45) }
+    var facing: CGFloat { facingRight ? 1 : -1 }
+    var head: CGPoint { CGPoint(x: pos.x, y: pos.y + size * 0.85) }
+    var mouth: CGPoint { CGPoint(x: pos.x + facing * size * 0.38, y: pos.y + size * 0.45) }
 
     // MARK: - Control
 
@@ -193,6 +242,8 @@ final class Pet {
         due.forEach { $0.run() }
         updateParticles(dt)
         needs.tick(dt, asleep: isAsleep)
+        powerTick(dt)
+        if scriptedTick(dt) { return }
 
         switch state {
         case .dragged: dragTick(dt); return
@@ -215,7 +266,7 @@ final class Pet {
         case .dance(let until):
             if t > nextNote { note() }
             if t > until { hold(0.4) }
-        case .dizzy(let until), .groom(let until), .stretch(let until), .sulk(let until):
+        case .dizzy(let until), .groom(let until), .stretch(let until), .sulk(let until), .pose(let until):
             if t > until { hold(0.4) }
         case .eat(let until): eatTick(until)
         case .zoomies(let laps): zoomTick(laps, dt)
@@ -226,7 +277,7 @@ final class Pet {
 
     /// Ride along with a moving window; fall if the ledge went away or got covered,
     /// and get flung off if the window is thrown around too fast.
-    private func followGround() {
+    func followGround() {
         guard let p = world.platform(standingOn) else { fall(); return }
         if let old = groundFrame, p.id > 0 {
             let dx = p.frame.minX - old.minX, dy = p.frame.maxY - old.maxY
@@ -249,7 +300,7 @@ final class Pet {
         if !p.holds(pos.x) { fall() }
     }
 
-    private func fall() {
+    func fall() {
         standingOn = nil
         jumping = false
         airTime = 0
@@ -257,10 +308,10 @@ final class Pet {
         state = .air
     }
 
-    private func physics(_ dt: Double) {
+    func physics(_ dt: Double) {
         airTime += dt
         let glide = kind.gravity < 1 && !jumping && airTime > 0.25
-        vel.dy -= Self.gravity * (glide ? kind.gravity : 1) * dt
+        vel.dy -= Self.gravity * World.gravityScale * (glide ? kind.gravity : 1) * dt
         if glide { vel.dy = max(vel.dy, -460) }
         spinAngle += spinVel * CGFloat(dt)
         let prevY = pos.y
@@ -313,7 +364,7 @@ final class Pet {
         }
     }
 
-    private func land(on p: Platform) {
+    func land(on p: Platform) {
         let impact = -vel.dy
         pos.y = p.y
         let dock = p.id == World.dockID
@@ -326,7 +377,7 @@ final class Pet {
             vel.dx *= 0.8
             spinVel *= 0.6
             squash = min(1, impact / 1400)
-            if dock, impact > 900, bubbleText == nil { say("boing!", 0.8) }
+            if dock, impact > 900, bubbleText == nil { say("boing!", 0.8); Sound.shared.play(.boing) }
             return
         }
 
@@ -353,6 +404,11 @@ final class Pet {
         }
         if impact > 2300 || spun || shaken {
             shaken = false
+            if kind.power != nil, chance(0.5) {   // fights back
+                hold(0.4)
+                after(0.4) { [weak self] in self?.powerMove() }
+                return
+            }
             state = .dizzy(until: t + 2.5)
             say("@_@", 2.5)
             emit(.sparkle, at: head, count: 3, vy: 40...90, gravity: 0)
@@ -372,7 +428,7 @@ final class Pet {
         then?()
     }
 
-    private func slide(_ dt: Double) {
+    func slide(_ dt: Double) {
         guard let p = world.platform(standingOn) else { fall(); return }
         pos.y = p.y
         let dv = 1300 * CGFloat(dt)
@@ -404,7 +460,7 @@ final class Pet {
 
     // MARK: - Climbing and hanging
 
-    private func startClimb(side: CGFloat) {
+    func startClimb(side: CGFloat) {
         let b = world.bounds
         standingOn = nil
         vel = .zero
@@ -417,24 +473,25 @@ final class Pet {
         say("!", 0.8)
     }
 
-    private func climb(_ side: CGFloat, _ top: CGFloat, _ dt: Double) {
+    func climb(_ side: CGFloat, _ top: CGFloat, _ dt: Double) {
         let b = world.bounds
         pos.x = side < 0 ? b.minX : b.maxX
         pos.y += kind.walkSpeed * scale * 0.8 * CGFloat(dt)
         if pos.y >= top {
+            if reachedTopOfWall(side) { return }
             pos.x -= side * size * 0.6
             launch(CGVector(dx: -side * 320, dy: 380))
             say(Bool.random() ? "wheee" : kind.sound, 1)
         }
     }
 
-    private func startHang(on p: Platform, edge: CGFloat, side: CGFloat) {
+    func startHang(on p: Platform, edge: CGFloat, side: CGFloat) {
         hangOffset = edge - p.frame.minX
         state = .hang(side: side, until: t + .random(in: 2...4.5))
         say(Bool.random() ? "eep!" : "uh oh", 1.2)
     }
 
-    private func hang(_ side: CGFloat, _ until: Double) {
+    func hang(_ side: CGFloat, _ until: Double) {
         guard let p = world.platform(standingOn) else { fall(); return }
         pos = CGPoint(x: p.frame.minX + hangOffset, y: p.y - size * 0.92)
         guard t > until else { return }
@@ -455,7 +512,7 @@ final class Pet {
 
     // MARK: - Walking and deciding
 
-    private func walk(toward target: CGFloat, run: Bool, _ dt: Double) {
+    func walk(toward target: CGFloat, run: Bool, _ dt: Double) {
         let tired = needs.fullness < 0.15 || needs.energy < 0.1
         let speed = kind.walkSpeed * scale * (run ? 2.4 : 1) * speedBoost * (tired ? 0.7 : 1)
         let dir: CGFloat = target > pos.x ? 1 : -1
@@ -498,7 +555,7 @@ final class Pet {
         pos.x = nx
     }
 
-    private func decide() {
+    func decide() {
         let e = needs.energy
         if needs.fullness < 0.25, t > nextHungerTalk {
             nextHungerTalk = t + 150
@@ -514,6 +571,7 @@ final class Pet {
         if standingOn == World.dockID, chance(0.45), dockHop() { return }
         if kind.climbs, chance(0.05), walkToWall() { return }
         if e > 0.4, chance(kind.zoomy * needs.happiness * 1.5) { startZoomies(); return }
+        if decideExtras() { return }
         if kind.clingy, chance(0.2), followCursor() { return }
         if chance(0.07), climbOnFriend() { return }
 
@@ -540,7 +598,7 @@ final class Pet {
         hold(.random(in: 1.5...4))
     }
 
-    private func idleTick(_ dt: Double) {
+    func idleTick(_ dt: Double) {
         if let c = cursorPos, abs(c.x - pos.x) < 420, abs(c.y - pos.y) < 300, chance(dt * 0.8) { facingRight = c.x > pos.x }
         if case .sit = state, chance(dt * 0.15) { facingRight.toggle() }
         if musicPlaying {
@@ -549,22 +607,22 @@ final class Pet {
         }
     }
 
-    private func note() {
+    func note() {
         nextNote = t + .random(in: 1.2...2.5)
         emit(.note, at: head, count: 1, vx: -30...30, vy: 50...90, gravity: 0, life: 1.2...1.8)
     }
 
     // MARK: - Movement helpers
 
-    private func hold(_ seconds: Double) { state = .idle(until: t + seconds) }
-    private func sitDown(_ seconds: Double) { state = .sit(until: t + seconds) }
+    func hold(_ seconds: Double) { state = .idle(until: t + seconds) }
+    func sitDown(_ seconds: Double) { state = .sit(until: t + seconds) }
 
-    private func walk(to x: CGFloat, run: Bool, then: (() -> Void)? = nil) {
+    func walk(to x: CGFloat, run: Bool, then: (() -> Void)? = nil) {
         onArrive = then
         state = .walk(to: x, run: run)
     }
 
-    private func launch(_ v: CGVector, thrown: Bool = false) {
+    func launch(_ v: CGVector, thrown: Bool = false) {
         standingOn = nil
         vel = v
         jumping = !thrown
@@ -575,7 +633,7 @@ final class Pet {
 
     /// Ballistic jump that lands on `target`. With `exact`, it lands right there even with no ledge.
     func jump(to target: CGPoint, apex extra: Double = 70, exact: Bool = false, then: (() -> Void)? = nil) {
-        let g = Self.gravity
+        let g = Self.gravity * World.gravityScale
         let dy = Double(target.y - pos.y)
         let apex = max(dy, 0) + extra
         let vy = (2 * g * apex).squareRoot()
@@ -585,27 +643,28 @@ final class Pet {
         onLand = then
     }
 
-    private func after(_ seconds: Double, _ run: @escaping () -> Void) {
+    func after(_ seconds: Double, _ run: @escaping () -> Void) {
         queue.append((t + seconds, run))
     }
 
-    private func currentSegment() -> ClosedRange<CGFloat>? {
+    func currentSegment() -> ClosedRange<CGFloat>? {
         world.platform(standingOn)?.segments.first { $0.contains(pos.x) }
     }
 
-    private func chance(_ p: Double) -> Bool { Double.random(in: 0..<1) < p }
+    func chance(_ p: Double) -> Bool { Double.random(in: 0..<1) < p }
 
     // MARK: - Little behaviours
 
-    private func sneeze() {
+    func sneeze() {
         say("achoo!", 1)
         emit(.sparkle, at: mouth, count: 3, vx: -80...80, vy: 20...80, gravity: 100)
         launch(CGVector(dx: -facing * 140, dy: 260))
     }
 
-    private func specialMove() {
+    func specialMove() {
         switch kind.special {
         case .none: break
+        case .timeStop, .transform, .auraKick: powerMove()
         case .fire:
             puffFire()
             hold(1.5)
@@ -632,20 +691,20 @@ final class Pet {
         }
     }
 
-    private func puffFire() {
+    func puffFire() {
         say("*puff*", 1)
         let a = facing * 140, b = facing * 320
         emit(.fire, at: mouth, count: 8, spread: 2, vx: min(a, b)...max(a, b), vy: -20...60, gravity: -80, life: 0.35...0.6)
     }
 
-    private func startZoomies() {
+    func startZoomies() {
         guard let seg = currentSegment(), seg.upperBound - seg.lowerBound > size * 4 else { return }
         say("zoom!", 1)
         zoomCenter = pos.x
         state = .zoomies(laps: Int.random(in: 3...6))
     }
 
-    private func zoomTick(_ laps: Int, _ dt: Double) {
+    func zoomTick(_ laps: Int, _ dt: Double) {
         guard let seg = currentSegment() else { hold(0.5); return }
         let lo = max(seg.lowerBound + size / 2, zoomCenter - 280), hi = min(seg.upperBound - size / 2, zoomCenter + 280)
         let target = facingRight ? hi : lo
@@ -666,7 +725,7 @@ final class Pet {
         }
     }
 
-    private func walkToWall() -> Bool {
+    func walkToWall() -> Bool {
         guard let seg = currentSegment() else { return false }
         let b = world.bounds
         let left = seg.lowerBound <= b.minX + 2, right = seg.upperBound >= b.maxX - 2
@@ -678,14 +737,14 @@ final class Pet {
         return true
     }
 
-    private func followCursor() -> Bool {
+    func followCursor() -> Bool {
         guard let c = cursorPos, let seg = currentSegment(), abs(c.x - pos.x) > 120 else { return false }
         walk(to: clamp(c.x, seg.lowerBound + size / 2, seg.upperBound - size / 2), run: false)
         if chance(0.3) { say(["hug?", "wait for me!", "*bloop bloop*"].randomElement()!, 1.4) }
         return true
     }
 
-    private func sulk() {
+    func sulk() {
         state = .sulk(until: t + 15)
         say("hmph", 2)
         if let c = cursorPos { facingRight = c.x < pos.x }
@@ -706,13 +765,15 @@ final class Pet {
         return Platform(id: headID, frame: frame, y: top, segments: [frame.minX...frame.maxX])
     }
 
-    private func climbOnFriend() -> Bool {
+    func climbOnFriend() -> Bool {
         guard let f = friends().filter({ $0 !== self && $0.isCalm && $0.standingOn != headID && abs($0.pos.x - pos.x) < 500 }).randomElement(),
               let head = f.headPlatform else { return false }
         say(["hop!", "up I go", "tower time!"].randomElement()!, 1.2)
         jump(to: CGPoint(x: f.pos.x, y: head.y)) { [weak self] in
-            self?.happyUntil = (self?.t ?? 0) + 1.5
-            self?.sitDown(4)
+            guard let self else { return }
+            self.happyUntil = self.t + 1.5
+            if (f.standingOn ?? 0) >= 4_000_000 { self.say("tower!", 1.5); Economy.shared.record(.tower) }
+            self.sitDown(4)
         }
         return true
     }
@@ -745,7 +806,7 @@ final class Pet {
 
     // MARK: - Dock
 
-    private func dockHop() -> Bool {
+    func dockHop() -> Bool {
         guard let dock = world.dock else { return false }
         let items = dock.items.sorted { $0.frame.midX < $1.frame.midX }
         guard let i = items.indices.min(by: { abs(items[$0].frame.midX - pos.x) < abs(items[$1].frame.midX - pos.x) }) else { return false }
@@ -755,7 +816,7 @@ final class Pet {
         return true
     }
 
-    private func hopAlongDock(_ items: [DockItem], from i: Int, to j: Int) {
+    func hopAlongDock(_ items: [DockItem], from i: Int, to j: Int) {
         let next = i + (j > i ? 1 : -1)
         guard let top = world.dock?.top else { return }
         jump(to: CGPoint(x: items[next].frame.midX, y: top), apex: 28) { [weak self] in
@@ -784,7 +845,7 @@ final class Pet {
 
     // MARK: - Care: food, toys, gifts
 
-    private func careTick() {
+    func careTick() {
         guard t > nextCareCheck else { return }
         nextCareCheck = t + 0.5
         if let food = props.foods.filter({ $0.grounded }).min(by: { abs($0.pos.x - pos.x) < abs($1.pos.x - pos.x) }),
@@ -808,7 +869,7 @@ final class Pet {
         }
     }
 
-    private func goEat(_ food: Prop) {
+    func goEat(_ food: Prop) {
         let side: CGFloat = food.pos.x > pos.x ? 1 : -1
         let x = food.pos.x - side * size * 0.35
         let arrive: () -> Void = { [weak self] in self?.startEating(food) }
@@ -819,15 +880,16 @@ final class Pet {
         }
     }
 
-    private func startEating(_ food: Prop) {
+    func startEating(_ food: Prop) {
         guard !food.dead, abs(food.pos.x - pos.x) < size, abs(food.pos.y - pos.y) < size else { return }
         facingRight = food.pos.x > pos.x
         eating = food
         say("nom", 1)
+        Sound.shared.play(.munch)
         state = .eat(until: t + 2.4)
     }
 
-    private func eatTick(_ until: Double) {
+    func eatTick(_ until: Double) {
         guard let food = eating, !food.dead else { eating = nil; hold(0.5); return }
         if Int(t * 8) % 3 == 0 { emit(.crumb, at: mouth, count: 1, vx: -50...50, vy: 30...90, gravity: 500, life: 0.3...0.6) }
         guard t > until else { return }
@@ -836,6 +898,8 @@ final class Pet {
         props.remove(food)
         eating = nil
         needs.fed(favorite: fav)
+        Economy.shared.record(.fed)
+        if fav { Economy.shared.record(.favorite) }
         lastInteraction = t
         if fav {
             say("yum!! my favorite", 2)
@@ -849,7 +913,7 @@ final class Pet {
         hold(1.2)
     }
 
-    private func chase(_ ball: Prop) {
+    func chase(_ ball: Prop) {
         guard let seg = currentSegment() else { return }
         let reachable = ball.groundID == standingOn || (!ball.grounded && abs(ball.pos.y - pos.y) < size * 2)
         if reachable {
@@ -861,12 +925,14 @@ final class Pet {
         }
     }
 
-    private func kick(_ ball: Prop) {
+    func kick(_ ball: Prop) {
         guard !ball.dead, abs(ball.pos.x - pos.x) < size * 0.9, abs(ball.pos.y - pos.y) < size else { return }
         ball.groundID = nil
         ball.vel = CGVector(dx: facing * .random(in: 350...700), dy: .random(in: 250...600))
         emit(.dust, at: CGPoint(x: ball.pos.x, y: ball.pos.y), count: 3)
         needs.played()
+        Economy.shared.record(.kicked)
+        Sound.shared.play(.pop)
         lastInteraction = t
         if chance(0.5) { say(Bool.random() ? "hehe" : kind.sound, 1) }
         happyUntil = t + 1
@@ -906,10 +972,12 @@ final class Pet {
         state = .air
     }
 
-    private func watch(_ id: Int, _ dt: Double) {
+    func watch(_ id: Int, _ dt: Double) {
         guard let w = world.windowInfo(id) else { stopWatching("aw…"); return }
         pos = CGPoint(x: w.frame.minX + w.frame.width * watchSeat, y: w.frame.minY + 2)
         needs.watched(dt)
+        watchSecs += dt
+        if watchSecs >= 60 { watchSecs = 0; Economy.shared.record(.watchedMinute) }
         let long = t - watchSince > 1500
         if !long, t > nextPopcorn {
             nextPopcorn = t + .random(in: 1.5...4)
@@ -948,6 +1016,7 @@ final class Pet {
         if isDragged || isWatching { return }
         if clickTimes.count >= 7, isGrounded, !isAsleep {
             clickTimes = []
+            if kind.power != nil, chance(0.5), powerMove() { return }
             state = .dizzy(until: t + 3)
             say("@_@", 3)
             return
@@ -972,6 +1041,7 @@ final class Pet {
             }
         case .startle:
             guard dist < 220 else { return }
+            if kind.power != nil, chance(0.2), powerMove() { return }
             say("!", 1)
             if kind.special == .barrage { specialMove(); return }
             if kind.special != .none { specialMove() }
@@ -1028,7 +1098,7 @@ final class Pet {
         if let id = standingOn, id > 0, id < Props.bedBase { dropToGround() }
     }
 
-    private func dropToGround() {
+    func dropToGround() {
         say(["whoa", "oop!", "down I go"].randomElement()!, 1)
         let floor = world.platforms.filter { $0.id < 0 && $0.y < pos.y && $0.holds(pos.x) }.max { $0.y < $1.y }
         if let f = floor { jump(to: CGPoint(x: pos.x, y: f.y), apex: 40) } else { fall() }
@@ -1036,6 +1106,7 @@ final class Pet {
 
     func typingBurst() {
         guard isCalm else { return }
+        if kind.power != nil, chance(0.25), powerMove() { return }
         say(chance(0.5) ? "!!" : "♪", 1.2)
         happyUntil = t + 1.2
         launch(CGVector(dx: 0, dy: 450))
@@ -1152,9 +1223,11 @@ final class Pet {
         }
     }
 
-    private func stroked() {
+    func stroked() {
         lastInteraction = t
         needs.petted()
+        Economy.shared.record(.petted)
+        Sound.shared.play(kind.id == "mochi" ? .purr : .ding, pitch: Double(1.4 - growth * 0.4))
         loveUntil = t + 1.5
         blushUntil = t + 2
         emit(.heart, at: head, count: 2, vx: -40...40, vy: 60...110, gravity: 0, life: 0.9...1.3)
@@ -1206,7 +1279,7 @@ final class Pet {
     }
 
     /// Swings like a pendulum from the cursor.
-    private func dragTick(_ dt: Double) {
+    func dragTick(_ dt: Double) {
         let target = clamp(-dragVX / 1800, -0.7, 0.7)
         dragRotVel += ((target - dragRot) * 120 - dragRotVel * 10) * CGFloat(dt)
         dragRot += dragRotVel * CGFloat(dt)
@@ -1239,16 +1312,20 @@ final class Pet {
                 spinVel = clamp(-v.dx / (size * 1.1), -16, 16)
                 thrownTimes.append(t)
                 needs.thrown()
+                Economy.shared.record(.thrown)
                 say("wheee", 1)
+                Sound.shared.play(.whoosh)
             }
         } else {
             vel = .zero
         }
     }
 
-    private func petted() {
+    func petted() {
         lastInteraction = t
         needs.petted()
+        Economy.shared.record(.petted)
+        if let found = onClicked { onClicked = nil; found(); return }
         if wasSulking {
             say("…fine ♥", 1.5)
             happyUntil = t + 1.5
@@ -1277,9 +1354,10 @@ final class Pet {
         launch(CGVector(dx: 0, dy: 1500))
         spinVel = -facing * .pi * 2 / CGFloat(2 * 1500 / Self.gravity)
         say("boing!", 1)
+        Sound.shared.play(.boing)
     }
 
-    private func popOutOfTrash() {
+    func popOutOfTrash() {
         pos = trashSpot
         let b = world.bounds
         launch(CGVector(dx: pos.x > b.midX ? -260 : 260, dy: 1100), thrown: true)
@@ -1291,17 +1369,17 @@ final class Pet {
 
     func emit(_ k: ParticleKind, at p: CGPoint, count: Int, spread: CGFloat = 6,
               vx: ClosedRange<CGFloat> = -60...60, vy: ClosedRange<CGFloat> = 60...160,
-              gravity: CGFloat = 300, life: ClosedRange<Double> = 0.5...0.9) {
+              gravity: CGFloat = 300, life: ClosedRange<Double> = 0.5...0.9, color: UInt32 = 0) {
         for _ in 0..<max(0, count) {
             let l = Double.random(in: life)
             particles.append(Particle(pos: CGPoint(x: p.x + .random(in: -spread...spread), y: p.y + .random(in: -spread / 2...spread / 2)),
                                       vel: CGVector(dx: .random(in: vx), dy: .random(in: vy)),
-                                      life: l, maxLife: l, kind: k, gravity: gravity))
+                                      life: l, maxLife: l, kind: k, gravity: gravity, color: color))
         }
         if particles.count > 150 { particles.removeFirst(particles.count - 150) }
     }
 
-    private func updateParticles(_ dt: Double) {
+    func updateParticles(_ dt: Double) {
         for i in particles.indices {
             particles[i].life -= dt
             particles[i].vel.dy -= particles[i].gravity * CGFloat(dt)
@@ -1400,12 +1478,51 @@ final class Pet {
         case .sulk:
             l.pose = .sit
             l.eyes = .angry
-        case .trashed:
+        case .trashed, .hidden, .inside:
             l.hidden = true
+        case .ceiling:
+            l.pose = .air
+            l.rot = CGFloat(sin(t * 6) * 0.15)
+        case .peek:
+            l.pose = .stand
+        case .swinging(let id, _):
+            l.pose = .sit
+            l.eyes = .happy
+            l.rot = props.items.first { $0.id == id }?.swingAngle ?? 0
+        case .sliding:
+            l.pose = .sit
+            l.eyes = .happy
+            l.rot = -0.6
+        case .fishing:
+            l.pose = .sit
+            if kind.hops { l.lift = CGFloat(sin(t * 2) * 0.6) }
+        case .game:
+            let moving = gameTarget.map { abs($0 - pos.x) > 4 } ?? false
+            l.pose = moving ? (Int(t * 12) % 2 == 0 ? .walkA : .walkB) : .stand
+        case .hiding:
+            l.pose = .stand
+        case .powerUp:
+            l.pose = .stand
+            l.eyes = .angry
+            l.sy = 0.92
+            l.rot = CGFloat(sin(t * 50) * 0.03)
+        case .pose:
+            l.pose = .stand
+            l.eyes = .angry
+            l.rot = facing * CGFloat(0.28 + sin(t * 2) * 0.04)
+            l.sx = 0.92
+            l.sy = 1.08
+        case .dash:
+            l.pose = Int(t * 20) % 2 == 0 ? .walkA : .walkB
+            l.rot = -facing * 0.25
+            l.eyes = .angry
         case .idle:
             l.sy = 1 + CGFloat(sin(t * 2.4) * 0.025)
             if musicPlaying { l.lift = CGFloat(abs(sin(t * .pi * 2))) }
         }
+        if shivering, !isAsleep { l.rot += CGFloat(sin(t * 60) * 0.03) }
+        l.umbrella = umbrella && !l.hidden && !isWatching
+        l.aura = aura
         if squash > 0 {
             l.sy *= 1 - CGFloat(squash) * 0.3
             l.sx *= 1 + CGFloat(squash) * 0.25

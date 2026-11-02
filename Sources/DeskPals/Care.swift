@@ -11,6 +11,9 @@ final class Needs {
     var happiness = 0.7
     var energy = 0.9
     var bond = 0.0
+    /// 0 baby, 1 kid, 2 grown up. New pets start as babies.
+    var stage = 2
+    var onGrow: ((Int) -> Void)?
     private var saveClock = 0.0
 
     init(petID: String) {
@@ -36,6 +39,11 @@ final class Needs {
         energy += asleep ? dt / 1200 : -dt / (5 * 3600)
         if fullness < 0.2 { happiness -= dt / 1800 }
         happiness += (0.5 - happiness) * dt / 7200
+        if (stage == 0 && bond >= 8) || (stage == 1 && bond >= 30) {
+            stage += 1
+            save()
+            onGrow?(stage)
+        }
         clampAll()
         saveClock += dt
         if saveClock > 10 { saveClock = 0; save() }
@@ -61,6 +69,7 @@ final class Needs {
         happiness = get("happiness", 0.7)
         energy = get("energy", 0.9)
         bond = get("bond", 0)
+        stage = Int(get("stage", 2))
         if let saved = d.object(forKey: key("saved")) as? Date {
             let away = Date().timeIntervalSince(saved)
             fullness -= away / (10 * 3600)
@@ -74,6 +83,7 @@ final class Needs {
         d.set(happiness, forKey: key("happiness"))
         d.set(energy, forKey: key("energy"))
         d.set(bond, forKey: key("bond"))
+        d.set(Double(stage), forKey: key("stage"))
         d.set(Date(), forKey: key("saved"))
     }
 }
@@ -115,11 +125,12 @@ enum Food: String, CaseIterable {
 }
 
 enum PropKind: Equatable {
-    case food(Food), ball, bed, gift
+    case food(Food), ball, bed, gift, place(Place)
 
     var image: CGImage {
         switch self {
         case .food(let f): return f.image
+        case .place(let p): return p.image()
         case .ball:
             return SpriteSheet.cached("ball") {
                 Pixels.image([".oooo.", "orrWro", "orrrro", "oWrrro", "orrrro", ".oooo."], ["o": 0x7A1020, "r": 0xF0445A])
@@ -143,7 +154,7 @@ enum PropKind: Equatable {
         case .ball: return 0.7
         case .food: return 0.25
         case .gift: return 0.3
-        case .bed: return 0.05
+        case .bed, .place: return 0.05
         }
     }
 }
@@ -159,6 +170,10 @@ final class Prop {
     var groundFrame: CGRect?
     var dead = false
     var dragged = false
+    /// Places: whether a pet is inside (house lights on), the swing's angle, and the garden's growth.
+    var occupied = false
+    var swingAngle: CGFloat = 0
+    var stage = 0
     fileprivate var dragOffset = CGVector.zero
     fileprivate var dragSamples: [(t: Double, p: CGPoint)] = []
     fileprivate var window: PropWindow!
@@ -178,11 +193,15 @@ final class Prop {
 
 final class Props {
     static let bedBase = 2_000_000
+    static let placeBase = 2_500_000
     private(set) var items: [Prop] = []
     private var nextID = 1
     var scale: CGFloat = 4
     let world: World
     var onGiftOpened: ((Prop) -> Void)?
+    var onClick: ((Prop) -> Bool)?
+    /// Time stop: frozen things don't move.
+    var frozen: (CGPoint) -> Bool = { _ in false }
 
     init(world: World) { self.world = world }
 
@@ -203,19 +222,54 @@ final class Props {
     }
 
     var bed: Prop? { items.first { $0.kind == .bed } }
+    var places: [Prop] { items.filter { if case .place = $0.kind { return true }; return false } }
+    func place(_ p: Place) -> Prop? { items.first { $0.kind == .place(p) } }
     var ball: Prop? { items.first { $0.kind == .ball } }
     var foods: [Prop] { items.filter { if case .food = $0.kind { return true }; return false } }
 
     /// The bed is something the pet can stand (and sleep) on.
     func platforms() -> [Platform] {
-        guard let bed, bed.grounded else { return [] }
-        let r = bed.rect
-        return [Platform(id: Self.bedBase + bed.id, frame: r, y: r.minY + r.height * 0.6,
-                         segments: [(r.minX + 4)...(r.maxX - 4)])]
+        var out: [Platform] = []
+        if let bed, bed.grounded {
+            let r = bed.rect
+            out.append(Platform(id: Self.bedBase + bed.id, frame: r, y: r.minY + r.height * 0.6,
+                                segments: [(r.minX + 4)...(r.maxX - 4)]))
+        }
+        for p in places where p.grounded {
+            guard case .place(let place) = p.kind, let l = place.ledge else { continue }
+            let r = p.rect, s = scale
+            out.append(Platform(id: Self.placeBase + p.id, frame: r, y: r.minY + CGFloat(l.y) * s,
+                                segments: [(r.minX + CGFloat(l.x0) * s)...(r.minX + CGFloat(l.x1 + 1) * s)]))
+        }
+        return out
+    }
+
+    // MARK: - Saved places
+
+    /// Places stay where you put them, across launches.
+    func savePlaces() {
+        let list = places.map { p -> [String: Any] in
+            guard case .place(let pl) = p.kind else { return [:] }
+            return ["kind": pl.rawValue, "x": Double(p.pos.x), "y": Double(p.pos.y), "stage": p.stage]
+        }
+        UserDefaults.standard.set(list, forKey: "places")
+    }
+
+    func restorePlaces() {
+        for e in UserDefaults.standard.array(forKey: "places") as? [[String: Any]] ?? [] {
+            guard let k = (e["kind"] as? String).flatMap(Place.init(rawValue:)), place(k) == nil,
+                  let x = e["x"] as? Double, let y = e["y"] as? Double else { continue }
+            let p = add(.place(k), at: CGPoint(x: x, y: y + 4))
+            p.stage = e["stage"] as? Int ?? 0
+        }
     }
 
     func tick(_ dt: Double) {
-        for p in items where !p.dragged { step(p, dt) }
+        for p in items where !p.dragged && !frozen(p.pos) { step(p, dt) }
+        let now = CACurrentMediaTime()
+        for p in places where p.kind == .place(.swing) {
+            p.swingAngle = p.occupied ? CGFloat(sin(now * 2.3) * 0.6) : p.swingAngle * 0.96
+        }
         items.forEach { $0.window.sync() }
     }
 
@@ -234,7 +288,7 @@ final class Props {
             p.spin -= p.vel.dx / (p.size.width / 2) * CGFloat(dt)
             if !g.holds(p.pos.x) { p.groundID = nil }
         } else {
-            p.vel.dy -= 2600 * dt
+            p.vel.dy -= 2600 * World.gravityScale * dt
             let prevY = p.pos.y
             p.pos.x += p.vel.dx * CGFloat(dt)
             p.pos.y += p.vel.dy * CGFloat(dt)
@@ -261,6 +315,7 @@ final class Props {
     }
 
     fileprivate func beginDrag(_ p: Prop, _ mouse: CGPoint) {
+        if onClick?(p) == true { return }
         p.dragged = true
         p.groundID = nil
         p.dragOffset = CGVector(dx: p.pos.x - mouse.x, dy: p.pos.y - mouse.y)
@@ -276,6 +331,7 @@ final class Props {
 
     fileprivate func endDrag(_ p: Prop, _ mouse: CGPoint) {
         p.dragged = false
+        if case .place = p.kind { DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in self?.savePlaces() } }
         let moved = p.dragSamples.count > 1
         if let first = p.dragSamples.first, CACurrentMediaTime() - first.t > 0.005 {
             let dt = CACurrentMediaTime() - first.t
@@ -285,6 +341,7 @@ final class Props {
             p.vel = v
         }
         if !moved, p.kind == .gift { onGiftOpened?(p) }
+        if case .place = p.kind { p.vel = CGVector(dx: p.vel.dx * 0.3, dy: min(p.vel.dy, 300)) }
     }
 }
 
@@ -326,7 +383,7 @@ final class PropWindow: NSPanel {
     }
 }
 
-private final class PropView: NSView {
+final class PropView: NSView {
     unowned let prop: Prop
     var onDown: (() -> Void)?
     var onDrag: (() -> Void)?
@@ -348,15 +405,49 @@ private final class PropView: NSView {
         guard let ctx = NSGraphicsContext.current?.cgContext else { return }
         ctx.interpolationQuality = .none
         let s = prop.size
+        if case .place(let place) = prop.kind {
+            drawPlace(ctx, place, s)
+            return
+        }
         ctx.translateBy(x: bounds.midX, y: s.height / 2)
         ctx.rotate(by: prop.spin)
         ctx.draw(prop.kind.image, in: CGRect(x: -s.width / 2, y: -s.height / 2, width: s.width, height: s.height))
     }
 }
 
+extension PropView {
+    /// Places animate: flickering fire, rippling water, lit windows, growing flowers and a swinging seat.
+    func drawPlace(_ ctx: CGContext, _ place: Place, _ s: CGSize) {
+        let t = CACurrentMediaTime()
+        let frame = Int(t * (place == .campfire ? 6 : 1.5)) % 2
+        let img = place.image(frame: frame, stage: prop.stage, lit: prop.occupied)
+        let r = CGRect(x: bounds.midX - s.width / 2, y: 0, width: s.width, height: s.height)
+        ctx.draw(img, in: r)
+        if place == .swing {
+            let px = prop.scale
+            let pivot = CGPoint(x: r.midX, y: r.maxY - px * 1.5)
+            let length = px * 17
+            let a = prop.swingAngle
+            let seatC = CGPoint(x: pivot.x + sin(a) * length, y: pivot.y - cos(a) * length)
+            ctx.setStrokeColor(CGColor(red: 0.42, green: 0.27, blue: 0.14, alpha: 1))
+            ctx.setLineWidth(max(1, px * 0.5))
+            for dx in [-2.2, 2.2] {
+                ctx.move(to: CGPoint(x: pivot.x + dx * px, y: pivot.y))
+                ctx.addLine(to: CGPoint(x: seatC.x + dx * px * cos(a), y: seatC.y + dx * px * sin(a)))
+            }
+            ctx.strokePath()
+            ctx.saveGState()
+            ctx.translateBy(x: seatC.x, y: seatC.y)
+            ctx.rotate(by: a)
+            ctx.draw(Place.seat, in: CGRect(x: -3 * px, y: -px, width: 6 * px, height: 2 * px))
+            ctx.restoreGState()
+        }
+    }
+}
+
 // MARK: - Particles
 
-enum ParticleKind { case dust, heart, note, popcorn, crumb, fire, sparkle, sweat, tentacle, fist }
+enum ParticleKind { case dust, heart, note, popcorn, crumb, fire, sparkle, sweat, tentacle, fist, flame }
 
 struct Particle {
     var pos: CGPoint
@@ -365,6 +456,17 @@ struct Particle {
     let maxLife: Double
     let kind: ParticleKind
     let gravity: CGFloat
+    var color: UInt32 = 0
+
+    /// Flames take the particle's own colour (auras).
+    static func image(for p: Particle) -> CGImage {
+        guard p.kind == .flame else { return image(p.kind) }
+        return SpriteSheet.cached("flame-\(p.color)") {
+            let r = (p.color >> 16) & 0xFF, g = (p.color >> 8) & 0xFF, b = p.color & 0xFF
+            let light = (min(255, r + (255 - r) / 2) << 16) | (min(255, g + (255 - g) / 2) << 8) | min(255, b + (255 - b) / 2)
+            return Pixels.image([".c.", "cLc", ".c."], ["c": p.color, "L": light])
+        }
+    }
 
     static func image(_ k: ParticleKind) -> CGImage {
         SpriteSheet.cached("particle-\(k)") {
@@ -378,6 +480,7 @@ struct Particle {
             case .sparkle: return Pixels.image([".s.", "sWs", ".s."], ["s": 0xFFD54F])
             case .sweat: return Pixels.image(["b", "b"], ["b": 0x6EC6FF])
             case .tentacle: return Pixels.image([".r.", "rRr", ".r."], ["r": 0xC8102E, "R": 0xFF4D5E])
+            case .flame: return Pixels.image(["c"], ["c": 0xFFFFFF])
             case .fist: return Pixels.image([".oooo.", "oppppo", "oppppo", ".oooo."], ["o": 0x3A2470, "p": 0x8C6BE0])
             }
         }

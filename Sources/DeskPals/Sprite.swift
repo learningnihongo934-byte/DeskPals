@@ -76,8 +76,8 @@ final class SpriteSheet {
         var pal = kind.palette
         pal["L"] = 0xFF4F86      // love-eyes pink
         pal["P"] = 0xFF9AAE      // blush
-        pal["G"] = 0x111111      // sunglasses
-        pal["g"] = 0x8A8AA8
+        pal["Z"] = 0x111111      // sunglasses (letters pets don't use)
+        pal["z"] = 0x8A8AA8
         if pal["R"] == nil { pal["R"] = 0xE0202A }   // odd-coloured eye
         let img = Pixels.image(grid(pose, eyes, blush: blush, glasses: glasses).map { String($0) }, pal)
         cache[key] = img
@@ -119,7 +119,7 @@ final class SpriteSheet {
             let y = top + eyeRow
             let eyeXs = rows[eyeRow].indices.filter { "13".contains(rows[eyeRow][$0]) }
             if let l = eyeXs.min(), let r = eyeXs.max() {
-                for x in max(0, l - 1)...min(n - 1, r + 1) where g[y][x] != "G" && g[y][x] != "g" && g[y][x] != "." { g[y][x] = "G" }
+                for x in max(0, l - 1)...min(n - 1, r + 1) where g[y][x] != "Z" && g[y][x] != "z" && g[y][x] != "." { g[y][x] = "Z" }
             }
         }
         guard pose != .sleep else { return g }
@@ -164,7 +164,34 @@ final class SpriteSheet {
 
     private func lens(_ ch: Character, _ row: [Character], _ x: Int) -> Character {
         let rightPixel = x + 1 >= row.count || row[x + 1] != ch
-        return ch == "1" && rightPixel ? "g" : "G"
+        return ch == "1" && rightPixel ? "z" : "Z"
+    }
+
+    /// A glowing outline around the silhouette, 2px wide, that flickers between frames.
+    func auraImage(_ pose: Pose, color: UInt32, frame: Int) -> CGImage {
+        let key = "aura-\(pose)-\(color)-\(frame)"
+        if let hit = cache[key] { return hit }
+        let g = grid(pose, .open)
+        let n = Self.size, m = n + 4
+        var out = [[Character]](repeating: [Character](repeating: ".", count: m), count: m)
+        for y in 0..<m {
+            for x in 0..<m {
+                var d = 99
+                for yy in max(0, y - 4)...min(n - 1, y) {
+                    for xx in max(0, x - 4)...min(n - 1, x) where g[yy][xx] != "." {
+                        d = min(d, max(abs(xx + 2 - x), abs(yy + 2 - y)))
+                    }
+                }
+                if d == 1 { out[y][x] = "A" }
+                if d == 2, (x * 7 + y * 13 + frame * 5) % 3 != 0 { out[y][x] = "a" }
+                if d == 3, y < m / 2, (x * 5 + y * 3 + frame * 7) % 4 == 0 { out[y][x] = "a" }   // flames licking upward
+            }
+        }
+        let r = (color >> 16) & 0xFF, gg = (color >> 8) & 0xFF, b = color & 0xFF
+        let light = (min(255, r + (255 - r) / 2) << 16) | (min(255, gg + (255 - gg) / 2) << 8) | min(255, b + (255 - b) / 2)
+        let img = Pixels.image(out.map { String($0) }, ["A": light, "a": color])
+        cache[key] = img
+        return img
     }
 
     // MARK: - Extras

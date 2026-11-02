@@ -23,6 +23,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var nextHeadID = 4_000_000
     private var settingsWindow: SettingsWindow?
     private var senses: Senses!
+    private var env: Environment!
+    private var games: MiniGames!
     private var status: NSStatusItem!
     private var timer: Timer?
     private var last = CACurrentMediaTime()
@@ -42,7 +44,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             return self.props.platforms() + self.slots.compactMap { $0.pet.headPlatform }
         }
         world.refresh()
-        settings.slots.forEach(spawn)
+        Pet.chaos = settings.chaos
+        settings.slots.forEach { spawn($0, isNew: false) }
+        props.restorePlaces()
+        env = Environment(world: world, pets: { [weak self] in self?.pets ?? [] })
+        FX.shared.rebuild()
+        props.frozen = { FX.shared.isFrozen(point: $0) }
+        games = MiniGames(world: world, props: props, selected: { [weak self] in self?.selected?.pet })
+        Economy.shared.onToast = { [weak self] msg in
+            Sound.shared.play(.coin)
+            self?.selected?.pet.say(msg, 2.4)
+        }
+        Economy.shared.atLeast(.adopted, slots.count)
         senses = Senses(pets: { [weak self] in self?.pets ?? [] }, world: world)
         senses.start()
         wireSettings()
@@ -57,6 +70,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                object: nil, queue: .main) { [weak self] _ in
             guard let self else { return }
             self.world.refresh()
+            self.env.rebuildOverlays()
+            FX.shared.rebuild()
             for p in self.pets where !self.world.bounds.contains(p.pos) { p.dropIn(atX: self.world.bounds.midX) }
         }
 
@@ -75,6 +90,38 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case "jump": self.selected?.pet.superJump()
                 case "sleep": self.pets.forEach { $0.fallAsleep() }
                 case "settings": self.showSettings()
+                case "coins": Economy.shared.earn(1000, "test coins")
+                case let cmd where cmd.hasPrefix("buy:"):
+                    if let it = ShopItem.find(String(cmd.dropFirst(4))) { Economy.shared.buy(it) }
+                case let cmd where cmd.hasPrefix("place:"):
+                    if let p = Place(rawValue: String(cmd.dropFirst(6))) { self.togglePlace(p) }
+                case let cmd where cmd.hasPrefix("weather:"):
+                    self.env.override = WeatherKind(rawValue: String(cmd.dropFirst(8)))
+                case let cmd where cmd.hasPrefix("theme:"):
+                    self.env.theme = Theme(rawValue: String(cmd.dropFirst(6))) ?? .none
+                case let cmd where cmd.hasPrefix("game:"):
+                    if let g = MiniGames.Kind(rawValue: String(cmd.dropFirst(5))) { self.games.start(g) }
+                case "stopgame": self.games.stop("stopped")
+                case "status":
+                    for s in self.slots { NSLog("DeskPals pet \(s.uid) \(s.pet.state) pos=\(Int(s.pet.pos.x)),\(Int(s.pet.pos.y)) target=\(s.pet.gameTarget.map { Int($0) } ?? -1) mouse=\(Int(NSEvent.mouseLocation.x)) selected=\(s.uid == self.selected?.uid)") }
+                case "power": self.selected?.pet.powerMove()
+                case let cmd where cmd.hasPrefix("power:"):
+                    self.slots.first { $0.uid == String(cmd.dropFirst(6)) }?.pet.powerMove()
+                case let cmd where cmd.hasPrefix("rival:"):
+                    let ps = self.pets
+                    if let a = ps.first(where: { $0.kind.rival != nil && $0.kind.dropArt != nil }) ?? ps.first(where: { $0.kind.rival != nil }), let b = ps.first(where: { $0.kind.id == a.kind.rival }) {
+                        switch cmd.dropFirst(6) {
+                        case "clash": Rivalry.faceOff(a, b) { Rivalry.clash(a, b) }
+                        case "duel": Rivalry.faceOff(a, b) { Rivalry.timeStopDuel(a, b) }
+                        case "drop": Rivalry.faceOff(a, b) { Rivalry.dropOn(a, b) }
+                        case "pose": Rivalry.faceOff(a, b) { Rivalry.strikePoses(a, b) }
+                        default: Rivalry.truce(a, b)
+                        }
+                    }
+                case let cmd where cmd.hasPrefix("remove:"):
+                    self.settings.remove(String(cmd.dropFirst(7)))
+                case "peek": _ = self.selected?.pet.peekFromCorner()
+                case "visit": _ = self.selected?.pet.visitPlace()
                 case let cmd where cmd.hasPrefix("add:"):
                     if let k = PetKind.all.first(where: { $0.id == cmd.dropFirst(4) }) { self.settings.add(k) }
                 default: break
@@ -90,6 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         slots.forEach { $0.needs.save() }
+        props.savePlaces()
     }
 
     /// Opening the app again while it runs (Finder, Spotlight, Launchpad) shows Settings.
@@ -100,14 +148,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: - Pets
 
-    private func spawn(_ info: PetSlotInfo) {
+    private func spawn(_ info: PetSlotInfo, isNew: Bool) {
         let needs = Needs(petID: info.uid)
+        if isNew, needs.bond < 1, !SettingsModel.kind(of: info).startsGrown {   // a brand-new pet starts as a baby
+            needs.stage = 0
+            needs.save()
+        }
         let pet = Pet(kind: SettingsModel.kind(of: info), scale: CGFloat(settings.scale), name: SettingsModel.name(of: info),
                       world: world, needs: needs, props: props)
         pet.accessory = SettingsModel.accessory(of: info)
         pet.headID = nextHeadID
         nextHeadID += 1
         pet.friends = { [weak self] in self?.pets ?? [] }
+        pet.growth = [0.6, 0.8, 1][min(needs.stage, 2)]
+        needs.onGrow = { [weak pet] stage in pet?.grewUp(to: stage) }
         pet.dropIn(atX: NSEvent.mouseLocation.x + .random(in: -300...300))
         slots.append(PetSlot(uid: info.uid, pet: pet, window: PetWindow(pet: pet), needs: needs))
     }
@@ -121,7 +175,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private func wireSettings() {
         settings.needsFor = { [weak self] uid in self?.slots.first { $0.uid == uid }?.needs }
-        settings.onAdd = { [weak self] info in self?.spawn(info); self?.updateIcon() }
+        settings.onAdd = { [weak self] info in
+            guard let self else { return }
+            self.spawn(info, isNew: true)
+            self.updateIcon()
+            Economy.shared.atLeast(.adopted, self.slots.count)
+        }
         settings.onRemove = { [weak self] uid in self?.despawn(uid); self?.updateIcon() }
         settings.onSelect = { [weak self] in self?.updateIcon() }
         settings.onScale = { [weak self] s in
@@ -136,6 +195,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         settings.onBall = { [weak self] in self?.throwBall() }
         settings.onBed = { [weak self] in self?.toggleBed() }
         settings.hasBed = { [weak self] in self?.props.bed != nil }
+        settings.env = env
+        settings.onPlace = { [weak self] p in self?.togglePlace(p) }
+        settings.hasPlace = { [weak self] p in self?.props.place(p) != nil }
+        settings.onGame = { [weak self] g in self?.games.start(g) }
+        settings.onPower = { [weak self] in self?.selected?.pet.powerMove() }
     }
 
     private func tick() {
@@ -149,11 +213,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             senses.newWindows(world.refresh())
         }
         senses.tick(dt)
+        env.tick(dt)
+        games.tick(dt)
         let mouse = NSEvent.mouseLocation, pressed = NSEvent.pressedMouseButtons != 0
-        for s in slots {
+        for s in slots where !FX.shared.isFrozen(s.pet) {   // time stop: frozen pets skip their turn
             s.pet.trackCursor(mouse, dt, pressed: pressed)
             s.pet.tick(dt)
         }
+        FX.shared.tick(dt)
         props.tick(dt)
         slots.forEach { $0.window.sync() }
         socialClock += dt
@@ -167,6 +234,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func socialize() {
         let pets = self.pets
         guard pets.count > 1 else { return }
+        Rivalry.tick(pets, clock: clock)
         for i in 0..<pets.count {
             for j in (i + 1)..<pets.count {
                 let a = pets[i], b = pets[j]
@@ -202,6 +270,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         props.add(.ball, at: CGPoint(x: x, y: pet.pos.y + pet.size * 2), vel: CGVector(dx: .random(in: -500...500), dy: 600))
     }
 
+    private func togglePlace(_ place: Place) {
+        if let p = props.place(place) {
+            props.remove(p)
+        } else if Economy.shared.owned.contains(place.shopID), let pet = selected?.pet {
+            // an open spot near the pet, not on top of another place
+            let taken = props.places.map(\.rect)
+            let tries = (0..<40).map { _ in clamp(pet.pos.x + .random(in: -900...900), world.bounds.minX + 140, world.bounds.maxX - 140) }
+            let x = tries.first { x in !taken.contains { abs($0.midX - x) < $0.width / 2 + 150 } } ?? tries[0]
+            props.add(.place(place), at: CGPoint(x: x, y: world.screenTop(at: x) - 120))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) { [weak self] in self?.props.savePlaces() }
+    }
+
     private func toggleBed() {
         if let bed = props.bed {
             props.remove(bed)
@@ -231,6 +312,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        let coins = item("🪙 \(Economy.shared.coins) coins · \(Economy.shared.quests.filter(\.done).count)/\(Economy.shared.quests.count) quests done", nil)
+        coins.isEnabled = false
+        menu.addItem(coins)
         let header = item("Your pets", nil)
         header.isEnabled = false
         menu.addItem(header)
@@ -271,6 +355,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(item(props.bed == nil ? "Place a bed" : "Remove the bed", #selector(bedItem)))
         menu.addItem(item("Call \(name) here", #selector(callHere)))
         menu.addItem(item("Call everyone here", #selector(callEveryone)))
+        menu.addItem(item("Power up! ⚡ (\(name))", #selector(powerUp)))
+
+        let gameMenu = NSMenu()
+        for (i, g) in MiniGames.Kind.allCases.enumerated() { gameMenu.addItem(item(g.title, #selector(playGame(_:)), tag: i)) }
+        if games.isRunning { gameMenu.addItem(.separator()); gameMenu.addItem(item("Stop game", #selector(stopGame))) }
+        let gameItem = item("Play", nil)
+        gameItem.submenu = gameMenu
+        menu.addItem(gameItem)
+
+        let placeMenu = NSMenu()
+        for (i, p) in Place.allCases.enumerated() {
+            let owned = Economy.shared.owned.contains(p.shopID)
+            let it = item(owned ? p.title : "\(p.title) (in the Shop)", owned ? #selector(placeItem(_:)) : nil, tag: i)
+            it.isEnabled = owned
+            it.state = props.place(p) != nil ? .on : .off
+            it.image = SpriteSheet.icon(p.image(), points: 18)
+            placeMenu.addItem(it)
+        }
+        let placeItem = item("Places", nil)
+        placeItem.submenu = placeMenu
+        menu.addItem(placeItem)
+
+        let worldMenu = NSMenu()
+        for (i, th) in Theme.allCases.enumerated() {
+            let owned = th.shopID.map { Economy.shared.owned.contains($0) } ?? true
+            let it = item(th.title + (owned ? "" : " (in the Shop)"), owned ? #selector(themeItem(_:)) : nil, tag: i)
+            it.isEnabled = owned
+            it.state = env.theme == th ? .on : .off
+            worldMenu.addItem(it)
+        }
+        worldMenu.addItem(.separator())
+        let auto = item("Weather: automatic", #selector(weatherItem(_:)), tag: -1)
+        auto.state = env.override == nil ? .on : .off
+        worldMenu.addItem(auto)
+        for (i, w) in WeatherKind.allCases.enumerated() {
+            let it = item("Weather: \(w.title)", #selector(weatherItem(_:)), tag: i)
+            it.state = env.override == w ? .on : .off
+            worldMenu.addItem(it)
+        }
+        let worldItem = item("World", nil)
+        worldItem.submenu = worldMenu
+        menu.addItem(worldItem)
 
         let sizeMenu = NSMenu()
         for (i, size) in SettingsModel.sizes.enumerated() {
@@ -316,6 +442,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func bedItem() { toggleBed() }
     @objc private func callHere() { selected?.pet.dropIn(atX: NSEvent.mouseLocation.x) }
     @objc private func chooseSize(_ sender: NSMenuItem) { settings.scale = SettingsModel.sizes[sender.tag].scale }
+
+    @objc private func playGame(_ sender: NSMenuItem) { games.start(MiniGames.Kind.allCases[sender.tag]) }
+    @objc private func stopGame() { games.stop("stopped") }
+    @objc private func powerUp() { selected?.pet.powerMove() }
+    @objc private func placeItem(_ sender: NSMenuItem) { togglePlace(Place.allCases[sender.tag]) }
+    @objc private func themeItem(_ sender: NSMenuItem) { env.theme = Theme.allCases[sender.tag] }
+    @objc private func weatherItem(_ sender: NSMenuItem) {
+        env.override = sender.tag < 0 ? nil : WeatherKind.allCases[sender.tag]
+    }
 
     @objc private func callEveryone() {
         let x = NSEvent.mouseLocation.x

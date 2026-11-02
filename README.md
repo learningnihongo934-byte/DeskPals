@@ -13,6 +13,38 @@ gets hungry, plays ball, and reacts to almost everything you do.
 Have as many pets on screen as you like, even several of the same kind. Each one has its own name, needs and outfit.
 They say hi when they meet, play tag, and climb onto each other's heads to build pet towers.
 
+## Power moves
+
+Double-click a pet, or use **Power up!** in the menu or Settings. Pets also power up on their own when they're
+very happy, and fight back when they're startled or thrown. A glowing pixel aura charges up first, then:
+
+- **Time stop**: a bubble where everything else freezes (pets, balls, rain) while the pet moves around
+- **Transformation**: grows into a giant alternate form for 20 seconds, with tentacles, a roar and screen shake
+- **Aura kick**: a dash with speed lines and an aura trail, then a spinning kick with a shockwave that knocks everything back
+- Fire breath, tentacles, punch barrages and spin kicks, bigger than usual
+
+Custom pets can also have a **rival**. When both are on screen they face off menacingly, clash barrages,
+duel in stopped time (anyone who can stop time can move in it), drop enormous things on each other,
+strike dramatic poses, sit back to back in a sulky truce, and bicker over popcorn while watching videos.
+
+## Places, worlds and weather
+
+- **Places** to buy and put anywhere: a house (pets nap inside and sit on the roof), a pond (fishing; slimes swim),
+  a garden that grows when they tend it, a swing, a slide and a campfire they gather round in the evening
+- **Worlds**: Beach, Forest (fireflies at night), Snowy and Space (low gravity)
+- **Weather**: seasons (autumn leaves, spring blossoms, winter snow) or your real weather from a city you type.
+  Rain falls and drips off window tops (pets get umbrellas), snow piles up on windows, storms flash and scare them
+- Holiday decorations: Halloween pumpkins, Christmas lights, New Year fireworks
+- Pets swing along under the menu bar, hide in the notch, peek in from the screen edges and take road trips to other screens
+
+## Coins, growing up and games
+
+- Earn coins for caring and playing, from three daily quests and from 13 achievements; spend them in the Shop
+- New pets start as babies and grow up as your bond grows (custom pets can start grown)
+- Mini-games: **Treat Rain** (steer your pet to catch falling treats), **Keepy-Uppy** (click the ball to keep it up)
+  and **Hide & Seek** (your pet hides behind one of your windows and peeks over the top)
+- Sound effects, and a Calm ↔ Chaotic personality slider (at full chaos they push each other off ledges and tug your cursor)
+
 ## Physics and movement
 
 - Walks along the visible tops of windows and rides them when you drag them
@@ -99,6 +131,10 @@ Put a JSON file in `~/Library/Application Support/DeskPals/Pets/` and restart De
 - Optional: `mirrored`, `walkSpeed`, `jumpiness`, `curiosity`, `sleepiness`, `clickStyle` (`chase`/`startle`), `gravity`, `hops`,
   `bounciness`, `zoomy`, `climbs`, `clingy`, `trait`, `backHair` (art rows shown as hair from behind).
 - `special`: `fire`, `tentacles`, `spinKick` or `barrage`. `favorite`: fish, berry, cookie, pepper, coffee, taiyaki or cherry.
+- Power moves: `power` (`timeStop`, `transform`, `auraKick`, or any special), `aura` (hex colour), `auraText` (glyphs that float
+  around it), `powerShout`, and for `transform`: `transformArt`, `transformPalette`, `transformScale`. `startsGrown` skips the baby stage.
+- Rivals: `rival` (another pet's id), `rivalLines`, `winLines`, `loseLines`, `watchLines`, `projectile` (`knife`),
+  and `dropArt` / `dropPalette` / `dropShout` for something enormous to drop on them.
 - `build.sh` also copies any `private-pets/*.json` (git-ignored) into that folder, for pets you keep to yourself.
 
 ## Build
@@ -121,6 +157,9 @@ Needs macOS 13+ and Xcode or the Swift toolchain.
 - `Senses.swift`: watches windows, apps, clicks, typing, idle time, videos, music and the battery
 - `PetWindow.swift`: the click-through window the pet is drawn in
 - `CustomPets.swift`: loads your own pets from JSON
+- `Power.swift`, `FX.swift`, `Rivalry.swift`: power moves, auras, the effects layer and rivals
+- `Economy.swift`, `Places.swift`, `Environment.swift`, `MiniGames.swift`, `Sound.swift`: coins and quests, places, weather and worlds, games, sound effects
+- `PetExtras.swift`: menu bar, notch, screen edges, places, mischief and weather reactions
 - `Settings.swift`: the Settings window and saved preferences
 - `Icon.swift`: draws the app icon
 - `AppDelegate.swift`: menu bar and the 60 fps loop

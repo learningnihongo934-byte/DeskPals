@@ -3,7 +3,7 @@ import Foundation
 enum ClickStyle: String { case chase, startle }
 
 /// A pet's signature move, used when it's startled or showing off.
-enum Special: String { case none, fire, tentacles, spinKick, barrage }
+enum Special: String { case none, fire, tentacles, spinKick, barrage, timeStop, transform, auraKick }
 
 /// One kind of pet: its pixel art and its personality.
 ///
@@ -18,10 +18,10 @@ struct PetKind {
     let species: String
     let sound: String
     let trait: String
-    let art: [String]
+    var art: [String]
     let mirrored: Bool
     let legs: [Int]
-    let palette: [Character: UInt32]
+    var palette: [Character: UInt32]
     let walkSpeed: CGFloat   // sprite pixels per second
     let jumpiness: Double    // chance per idle decision to hop to another ledge
     let curiosity: Double    // chance to go and inspect a new window
@@ -38,6 +38,29 @@ struct PetKind {
     var special: Special = .none
     var backHair: [Int] = []   // art rows painted as hair when seen from behind (for people)
     var shout: String? = nil   // what it yells during its special move
+    /// The big move from double-clicking or "Power up!" (defaults to its special).
+    var power: Special? = nil
+    var aura: UInt32? = nil
+    /// Glyphs that float around it while powered up.
+    var auraText: String? = nil
+    var powerShout: String? = nil
+    /// Art for a transformation power, and how much bigger it gets.
+    var transformArt: [String]? = nil
+    var transformPalette: [Character: UInt32]? = nil
+    var transformScale: CGFloat = 2.5
+    /// Rivalry: the id of a pet this one fights whenever they're both on screen, and what it says.
+    var rival: String? = nil
+    var rivalLines: [String] = []
+    var winLines: [String] = []
+    var loseLines: [String] = []
+    var watchLines: [String] = []
+    /// Thrown during its time stop ("knife"), and a giant thing it can drop on its rival.
+    var projectile: String? = nil
+    var dropArt: [String]? = nil
+    var dropPalette: [Character: UInt32] = [:]
+    var dropShout: String? = nil
+    /// Characters can skip the baby stage.
+    var startsGrown = false
 
     static let builtIn: [PetKind] = [mochi, gloop, ember, pip]
     /// Built-in pets plus any custom pets from ~/Library/Application Support/DeskPals/Pets.
@@ -150,6 +173,7 @@ struct PetKind {
 /// Things the pet can wear, unlocked as your bond grows.
 enum Accessory: String, CaseIterable {
     case none, bow, partyHat, sunglasses, santaHat, crown
+    case wizardHat, cowboyHat, headphones, flower, bandana   // from the shop
 
     var title: String {
         switch self {
@@ -159,6 +183,19 @@ enum Accessory: String, CaseIterable {
         case .sunglasses: return "Sunglasses"
         case .santaHat: return "Santa hat"
         case .crown: return "Crown"
+        case .wizardHat: return "Wizard hat"
+        case .cowboyHat: return "Cowboy hat"
+        case .headphones: return "Headphones"
+        case .flower: return "Flower"
+        case .bandana: return "Bandana"
+        }
+    }
+
+    /// Shop outfits are bought with coins instead of unlocked by bond level.
+    var shopID: String? {
+        switch self {
+        case .wizardHat, .cowboyHat, .headphones, .flower, .bandana: return "outfit.\(rawValue)"
+        default: return nil
         }
     }
 
@@ -170,6 +207,7 @@ enum Accessory: String, CaseIterable {
         case .sunglasses: return 3
         case .santaHat: return 4
         case .crown: return 5
+        default: return 0
         }
     }
 
@@ -186,6 +224,17 @@ enum Accessory: String, CaseIterable {
             return (["....rw", "...rr.", "..rrr.", ".rrrr.", "wwwwww"], ["r": 0xE53935, "w": 0xFFFFFF], 0, 0)
         case .crown:
             return (["y.y.y", "yyyyy", "yrysy", "yyyyy"], ["y": 0xFFC83D, "r": 0xE53935, "s": 0x4FC3F7], 0, 0)
+        case .wizardHat:
+            return (["...p...", "..pp...", "..ppp..", ".ppypp.", ".ppppp.", "ppppppp"], ["p": 0x5B3FA8, "y": 0xFFD54F], 0, 0)
+        case .cowboyHat:
+            return (["...bbb...", "..bbbbb..", "..ddddd..", "bbbbbbbbb"], ["b": 0x9C6B3C, "d": 0x5C3A1E], 0, 0)
+        case .headphones:
+            return (["...kkkkkkkk...", "..k........k..", ".k..........k.", ".k..........k.",
+                     "rr..........rr", "rr..........rr", "rr..........rr"], ["k": 0x2B2B36, "r": 0xE53935], 0, -4)
+        case .flower:
+            return ([".p.", "pyp", ".p."], ["p": 0xFF7EB6, "y": 0xFFE066], 4, 0)
+        case .bandana:
+            return (["rrrrrrrrrrrr..", "rrWrrrWrrrrrrr", "...........rr."], ["r": 0xD7263D], 1, -1)
         }
     }
 }
