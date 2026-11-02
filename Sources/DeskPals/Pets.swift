@@ -1,13 +1,17 @@
 import Foundation
 
-enum ClickStyle { case chase, startle }
+enum ClickStyle: String { case chase, startle }
+
+/// A pet's signature move, used when it's startled or showing off.
+enum Special: String { case none, fire, tentacles, spinKick, barrage }
 
 /// One kind of pet: its pixel art and its personality.
 ///
 /// Art is 16 columns wide and drawn facing right (or left, with `mirrored`).
-/// `o` outline, `b` base, `s` shade, `h` highlight, `a` accent, `n` nose or mouth, `K` dark, `.` empty.
+/// `o` outline, `b` base, `s` shade, `h` highlight (or hair), `a` accent, `n` nose or mouth, `K` dark, `.` empty.
 /// `1` and `2` mark the top and bottom rows of each 2x2 eye, so the renderer can
-/// open, close or swirl them. Legs are 2px stubs drawn under the art.
+/// open, close or swirl them; `3` and `4` mark an eye whose pupil uses the `R` colour instead.
+/// Legs are 2px stubs drawn under the art.
 struct PetKind {
     let id: String
     let name: String
@@ -29,11 +33,15 @@ struct PetKind {
     let zoomy: Double        // chance of a burst of zoomies when happy
     let climbs: Bool         // climbs up the sides of the screen
     let clingy: Bool         // follows your cursor around
-    let breathesFire: Bool
     let favorite: Food
     let phrases: [String]
+    var special: Special = .none
+    var backHair: [Int] = []   // art rows painted as hair when seen from behind (for people)
+    var shout: String? = nil   // what it yells during its special move
 
-    static let all: [PetKind] = [mochi, gloop, ember, pip]
+    static let builtIn: [PetKind] = [mochi, gloop, ember, pip]
+    /// Built-in pets plus any custom pets from ~/Library/Application Support/DeskPals/Pets.
+    static let all: [PetKind] = builtIn + CustomPets.load()
 
     static let mochi = PetKind(
         id: "mochi", name: "Mochi", species: "cat", sound: "mew!", trait: "Chases clicks, naps a lot",
@@ -57,7 +65,7 @@ struct PetKind {
         palette: ["o": 0x4A3530, "b": 0xF6D7A7, "s": 0xE0A868, "h": 0xFFF4E0, "a": 0xF29AA3, "n": 0xF29AA3, "K": 0x2B1D1A],
         walkSpeed: 22, jumpiness: 0.25, curiosity: 0.7, sleepiness: 1.5,
         clickStyle: .chase, gravity: 1, hops: false,
-        bounciness: 0.3, zoomy: 0.12, climbs: true, clingy: false, breathesFire: false, favorite: .fish,
+        bounciness: 0.3, zoomy: 0.12, climbs: true, clingy: false, favorite: .fish,
         phrases: ["mew", "mrrp?", "purr…", "*stares*", "feed me?", "mrow"])
 
     static let gloop = PetKind(
@@ -84,7 +92,7 @@ struct PetKind {
         palette: ["o": 0x1D4A36, "b": 0x7BE495, "s": 0x46B46F, "h": 0xD4FFE0, "a": 0xFF9AAE, "n": 0x1D4A36, "K": 0x173B2B],
         walkSpeed: 14, jumpiness: 0.1, curiosity: 0.4, sleepiness: 1,
         clickStyle: .startle, gravity: 1, hops: true,
-        bounciness: 0.6, zoomy: 0.03, climbs: false, clingy: true, breathesFire: false, favorite: .berry,
+        bounciness: 0.6, zoomy: 0.03, climbs: false, clingy: true, favorite: .berry,
         phrases: ["blub", "bloop!", "*wobble*", "squish", "glorp?", "hug?"])
 
     static let ember = PetKind(
@@ -109,7 +117,7 @@ struct PetKind {
         palette: ["o": 0x3D2216, "b": 0xF0803A, "s": 0xC85D22, "h": 0xFFF2E2, "a": 0xFFC9A8, "n": 0x1D110B, "K": 0x1D110B],
         walkSpeed: 30, jumpiness: 0.2, curiosity: 0.9, sleepiness: 0.8,
         clickStyle: .chase, gravity: 1, hops: false,
-        bounciness: 0.3, zoomy: 0.25, climbs: true, clingy: false, breathesFire: false, favorite: .cookie,
+        bounciness: 0.3, zoomy: 0.25, climbs: true, clingy: false, favorite: .cookie,
         phrases: ["yip!", "what's that?", "*sniff sniff*", "play?", "heehee", "zoom?"])
 
     static let pip = PetKind(
@@ -134,8 +142,9 @@ struct PetKind {
         palette: ["o": 0x2D1A45, "b": 0xA77AE0, "s": 0x7A4FB8, "h": 0xD2B8F5, "a": 0xFFD36E, "n": 0x7A4FB8, "K": 0x1B1029],
         walkSpeed: 18, jumpiness: 0.3, curiosity: 0.6, sleepiness: 1.2,
         clickStyle: .startle, gravity: 0.6, hops: false,
-        bounciness: 0.35, zoomy: 0.08, climbs: false, clingy: false, breathesFire: true, favorite: .pepper,
-        phrases: ["rawr!", "*puff*", "treasure?", "I'm fierce", "smol but mighty", "hoard time"])
+        bounciness: 0.35, zoomy: 0.08, climbs: false, clingy: false, favorite: .pepper,
+        phrases: ["rawr!", "*puff*", "treasure?", "I'm fierce", "smol but mighty", "hoard time"],
+        special: .fire)
 }
 
 /// Things the pet can wear, unlocked as your bond grows.

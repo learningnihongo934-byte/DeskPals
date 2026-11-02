@@ -530,7 +530,7 @@ final class Pet {
         if r < 0.76 { say("*lick*", 1); state = .groom(until: t + 2.2); return }
         if r < 0.78 { sneeze(); return }
         if r < 0.81 { state = .stretch(until: t + 1.4); return }
-        if r < 0.85, kind.breathesFire { puffFire(); hold(1.5); return }
+        if r < 0.85, kind.special != .none { specialMove(); return }
         if r < 0.92 { say(kind.phrases.randomElement()!, 1.6) }
         hold(.random(in: 1.5...4))
     }
@@ -596,6 +596,35 @@ final class Pet {
         say("achoo!", 1)
         emit(.sparkle, at: mouth, count: 3, vx: -80...80, vy: 20...80, gravity: 100)
         launch(CGVector(dx: -facing * 140, dy: 260))
+    }
+
+    private func specialMove() {
+        switch kind.special {
+        case .none: break
+        case .fire:
+            puffFire()
+            hold(1.5)
+        case .tentacles:
+            say(kind.shout ?? "…", 1.4)
+            let a = -facing * 60, b = -facing * 280
+            emit(.tentacle, at: CGPoint(x: pos.x - facing * size * 0.3, y: pos.y + size * 0.5), count: 16, spread: 4,
+                 vx: min(a, b)...max(a, b), vy: 140...340, gravity: 260, life: 0.6...1.0)
+            squash = 0.4
+            hold(1.5)
+        case .spinKick:
+            say(kind.shout ?? "hyah!", 1)
+            emit(.dust, at: pos, count: 4)
+            trick = true
+            launch(CGVector(dx: facing * 120, dy: 700))
+            spinVel = -facing * .pi * 2 / CGFloat(2 * 700 / Self.gravity)
+        case .barrage:
+            say(kind.shout ?? "!!!", 1.6)
+            let a = facing * 280, b = facing * 620
+            emit(.fist, at: CGPoint(x: pos.x + facing * size * 0.55, y: pos.y + size * 0.5), count: 18, spread: 12,
+                 vx: min(a, b)...max(a, b), vy: -90...90, gravity: 0, life: 0.15...0.4)
+            squash = 0.3
+            hold(1.6)
+        }
     }
 
     private func puffFire() {
@@ -879,13 +908,15 @@ final class Pet {
             say("!", 0.8)
             walk(to: clamp(p.x, seg.lowerBound + size / 2, seg.upperBound - size / 2), run: true) { [weak self] in
                 guard let self else { return }
+                if self.kind.special == .spinKick { self.specialMove(); return }
                 self.say(self.kind.sound, 1)
                 self.launch(CGVector(dx: self.facing * 140, dy: 560))   // pounce
             }
         case .startle:
             guard dist < 220 else { return }
             say("!", 1)
-            if kind.breathesFire { puffFire() }
+            if kind.special == .barrage { specialMove(); return }
+            if kind.special != .none { specialMove() }
             let away: CGFloat = dx > 0 ? -1 : 1
             launch(CGVector(dx: away * 180, dy: 650))
             onLand = { [weak self] in

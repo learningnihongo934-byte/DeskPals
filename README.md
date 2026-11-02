@@ -15,6 +15,8 @@ You can rename your pet in Settings.
 ## Physics and movement
 
 - Walks along the visible tops of windows and rides them when you drag them
+- Stands on text boxes, buttons, toolbars and images inside the app you're using
+- Knows when the Dock is hidden (full-screen apps) and walks on the real bottom of the screen
 - Gets flung off if you throw a window around too fast
 - Hangs off window ledges, then pulls itself up or drops
 - Climbs up the sides of the screen (cat and fox), and grabs the wall when you throw it there
@@ -66,9 +68,36 @@ DeskPals only reads window positions, click positions, "a key was pressed recent
 whether an app is keeping the screen awake (videos), whether the speakers are in use (music), and the battery level.
 It never reads window titles or anything on screen.
 
-Walking on individual Dock icons needs Accessibility permission, only to find where the icons are.
-Without it, the pet walks on top of the Dock as one long ledge. Because the app is signed locally,
+Walking on individual Dock icons, and standing on text boxes and buttons inside apps, needs Accessibility
+permission. DeskPals uses it only to find where those things are (their role and position, never any text).
+Without it, the pet walks on top of the Dock as one long ledge and on window tops. Because the app is signed locally,
 macOS may ask again after you rebuild it.
+
+## Make your own pet
+
+Put a JSON file in `~/Library/Application Support/DeskPals/Pets/` and restart DeskPals. It shows up next to the built-in pets.
+
+```json
+{
+  "id": "bolt",
+  "name": "Bolt",
+  "species": "robot",
+  "sound": "beep",
+  "art": ["...16 characters per row, up to 16 rows..."],
+  "legs": [5, 9],
+  "palette": { "o": "22212B", "b": "9AD0FF", "h": "FFFFFF", "K": "111111" },
+  "favorite": "cookie",
+  "special": "barrage",
+  "shout": "BEEP BEEP!",
+  "phrases": ["beep", "boop"]
+}
+```
+
+- Art uses the same letters as the built-in pets (see `Pets.swift`): `1`/`2` mark the eyes, `3`/`4` an eye drawn in the `R` colour, `n` the mouth.
+- Optional: `mirrored`, `walkSpeed`, `jumpiness`, `curiosity`, `sleepiness`, `clickStyle` (`chase`/`startle`), `gravity`, `hops`,
+  `bounciness`, `zoomy`, `climbs`, `clingy`, `trait`, `backHair` (art rows shown as hair from behind).
+- `special`: `fire`, `tentacles`, `spinKick` or `barrage`. `favorite`: fish, berry, cookie, pepper, coffee, taiyaki or cherry.
+- `build.sh` also copies any `private-pets/*.json` (git-ignored) into that folder, for pets you keep to yourself.
 
 ## Build
 
@@ -89,6 +118,7 @@ Needs macOS 13+ and Xcode or the Swift toolchain.
 - `Care.swift`: needs, food, the ball, the bed, gifts and particles
 - `Senses.swift`: watches windows, apps, clicks, typing, idle time, videos, music and the battery
 - `PetWindow.swift`: the click-through window the pet is drawn in
+- `CustomPets.swift`: loads your own pets from JSON
 - `Settings.swift`: the Settings window and saved preferences
 - `Icon.swift`: draws the app icon
 - `AppDelegate.swift`: menu bar and the 60 fps loop

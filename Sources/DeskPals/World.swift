@@ -39,6 +39,7 @@ final class World {
     private(set) var windows: [WindowInfo] = []
     private(set) var bounds = CGRect(x: 0, y: 0, width: 1440, height: 900)
     var dock: DockInfo?
+    var ledges: Ledges?
     var extraPlatforms: (() -> [Platform])?
     private var byID: [Int: Platform] = [:]
     private var seen = Set<Int>()
@@ -61,10 +62,20 @@ final class World {
         let flipH = primary.frame.height
         bounds = screens.reduce(CGRect.null) { $0.union($1.frame) }
 
+        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
+            as? [[String: Any]] ?? []
+        // macOS keeps the Dock's space reserved even while it's hidden (full-screen apps),
+        // so only stand above it when its window is actually on screen.
+        let dockShowing = list.contains {
+            ($0[kCGWindowOwnerName as String] as? String) == "Dock" && ($0[kCGWindowLayer as String] as? Int) == 20
+        }
+
         var found: [Platform] = []
         for (i, s) in screens.enumerated() {
             let v = s.visibleFrame
-            if let dock, s.frame.contains(CGPoint(x: dock.frame.midX, y: dock.frame.midY)) {
+            if !dockShowing {
+                found.append(Platform(id: -(i + 1), frame: s.frame, y: s.frame.minY + 1, segments: [s.frame.minX...s.frame.maxX]))
+            } else if let dock, s.frame.contains(CGPoint(x: dock.frame.midX, y: dock.frame.midY)) {
                 // Stand on the Dock's icons; beside the Dock, the floor is the very bottom of the screen.
                 found.append(Platform(id: Self.dockID, frame: dock.frame, y: dock.top,
                                       segments: [dock.frame.minX...dock.frame.maxX]))
@@ -77,8 +88,6 @@ final class World {
             }
         }
 
-        let list = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID)
-            as? [[String: Any]] ?? []
         var inFront: [CGRect] = []
         var fresh: [Int] = []
         var infos: [WindowInfo] = []
@@ -107,6 +116,14 @@ final class World {
             }
             segs = segs.filter { $0.upperBound - $0.lowerBound > 24 }
             if !segs.isEmpty { found.append(Platform(id: id, frame: r, y: top, segments: segs)) }
+        }
+        // Text boxes, buttons and toolbars inside the front window, if it's still in front.
+        if let ledges, let front = infos.first, abs(front.frame.minX - ledges.window.minX) < 3,
+           abs(front.frame.maxY - ledges.window.maxY) < 3, abs(front.frame.width - ledges.window.width) < 3 {
+            for l in ledges.items where l.frame.maxY < front.frame.maxY - 8 {
+                found.append(Platform(id: l.id, frame: l.frame, y: l.frame.maxY,
+                                      segments: [(l.frame.minX + 2)...(l.frame.maxX - 2)]))
+            }
         }
         found += extraPlatforms?() ?? []
 
@@ -203,6 +220,61 @@ enum DockReader {
 
     private static func frame(_ el: AXUIElement, _ flipH: CGFloat) -> CGRect? {
         guard let pv = copy(el, kAXPositionAttribute), let sv = copy(el, kAXSizeAttribute) else { return nil }
+        var p = CGPoint.zero, s = CGSize.zero
+        guard AXValueGetValue(pv as! AXValue, .cgPoint, &p), AXValueGetValue(sv as! AXValue, .cgSize, &s) else { return nil }
+        return CGRect(x: p.x, y: flipH - p.y - s.height, width: s.width, height: s.height)
+    }
+}
+
+struct Ledge {
+    let id: Int
+    let frame: CGRect
+}
+
+/// Things inside the front window that make good ledges, found with the same Accessibility
+/// permission as the Dock. Only roles and positions are read, never any text or values.
+struct Ledges {
+    static let base = 1_000_000
+    static let roles: Set<String> = ["AXTextArea", "AXTextField", "AXComboBox", "AXSearchField", "AXButton",
+                                     "AXPopUpButton", "AXImage", "AXToolbar", "AXTabGroup", "AXWebArea"]
+    let window: CGRect
+    let items: [Ledge]
+
+    /// Slow-ish (walks another app's accessibility tree), so call it off the main thread.
+    static func read(pid: pid_t, flipH: CGFloat) -> Ledges? {
+        guard AXIsProcessTrusted() else { return nil }
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        // Electron apps (like Claude, VS Code, Discord) only build their tree when asked.
+        AXUIElementSetAttributeValue(app, "AXManualAccessibility" as CFString, kCFBooleanTrue)
+        guard let win = attr(app, kAXFocusedWindowAttribute).map({ $0 as! AXUIElement }),
+              let wf = frame(win, flipH) else { return nil }
+        var items: [Ledge] = []
+        var queue: [(AXUIElement, Int)] = [(win, 0)]
+        var visited = 0
+        while !queue.isEmpty, visited < 900, items.count < 60 {
+            let (el, depth) = queue.removeFirst()
+            visited += 1
+            let role = attr(el, kAXRoleAttribute) as? String ?? ""
+            if roles.contains(role), let f = frame(el, flipH), f.width >= 60, f.height >= 18,
+               f.width < wf.width - 4 || role == "AXWebArea", wf.intersects(f), f.maxY < wf.maxY - 30 {
+                let key = "\(role)|\(Int(f.minX / 8))|\(Int(f.width / 8))"
+                items.append(Ledge(id: base + abs(key.hashValue % 900_000), frame: f.intersection(wf)))
+            }
+            if depth < 30, let kids = attr(el, kAXChildrenAttribute) as? [AXUIElement] {
+                queue += kids.map { ($0, depth + 1) }
+            }
+        }
+        return Ledges(window: wf, items: items)
+    }
+
+    private static func attr(_ el: AXUIElement, _ name: String) -> CFTypeRef? {
+        var v: CFTypeRef?
+        return AXUIElementCopyAttributeValue(el, name as CFString, &v) == .success ? v : nil
+    }
+
+    private static func frame(_ el: AXUIElement, _ flipH: CGFloat) -> CGRect? {
+        guard let pv = attr(el, kAXPositionAttribute), let sv = attr(el, kAXSizeAttribute) else { return nil }
         var p = CGPoint.zero, s = CGSize.zero
         guard AXValueGetValue(pv as! AXValue, .cgPoint, &p), AXValueGetValue(sv as! AXValue, .cgSize, &s) else { return nil }
         return CGRect(x: p.x, y: flipH - p.y - s.height, width: s.width, height: s.height)

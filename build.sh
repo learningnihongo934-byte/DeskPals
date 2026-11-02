@@ -38,6 +38,12 @@ PLIST
 codesign --force --sign - "$APP" >/dev/null
 echo "Built $APP"
 
+# Your own pets (git-ignored), installed where the app looks for custom pets.
+if compgen -G "private-pets/*.json" >/dev/null; then
+    mkdir -p "$HOME/Library/Application Support/DeskPals/Pets"
+    cp private-pets/*.json "$HOME/Library/Application Support/DeskPals/Pets/"
+fi
+
 case "${1:-}" in
     run) pkill -x DeskPals 2>/dev/null || true; open "$APP" ;;
     preview) "$APP/Contents/MacOS/DeskPals" --preview build/preview.png && echo "Wrote build/preview.png" ;;

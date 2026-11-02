@@ -45,7 +45,7 @@ final class SpriteSheet {
             if kind.mirrored { r.reverse() }
             return r
         }
-        let eyes = rows.enumerated().flatMap { r, row in row.indices.filter { row[$0] == "1" }.map { (r, $0) } }
+        let eyes = rows.enumerated().flatMap { r, row in row.indices.filter { "13".contains(row[$0]) }.map { (r, $0) } }
         let er = eyes.first?.0 ?? 4
         eyeRow = er
         let xs = eyes.map { CGFloat($0.1) }
@@ -78,6 +78,7 @@ final class SpriteSheet {
         pal["P"] = 0xFF9AAE      // blush
         pal["G"] = 0x111111      // sunglasses
         pal["g"] = 0x8A8AA8
+        if pal["R"] == nil { pal["R"] = 0xE0202A }   // odd-coloured eye
         let img = Pixels.image(grid(pose, eyes, blush: blush, glasses: glasses).map { String($0) }, pal)
         cache[key] = img
         return img
@@ -90,19 +91,25 @@ final class SpriteSheet {
         let style: Eyes = pose == .sleep ? .closed : eyes
         let center = eyeCenterX
         for (r, row) in rows.enumerated() where (0..<n).contains(top + r) {
+            let norm = row.map { $0 == "3" ? "1" : ($0 == "4" ? "2" : $0) } as [Character]
             for x in 0..<n {
                 var ch = row[x]
-                if pose == .back, ch == "1" || ch == "2" || ch == "n" {
-                    ch = "b"   // seen from behind: no face
-                } else if ch == "1" || ch == "2" {
-                    ch = glasses && style != .closed ? lens(ch, row, x) : eyeChar(ch, row, x, style, inner: CGFloat(x) + 0.5 < center ? 1 : -1)
+                let isEye = "1234".contains(ch)
+                if pose == .back {
+                    // seen from behind: no face, and people show the back of their hair
+                    if kind.backHair.contains(r), "bs1234n".contains(ch) { ch = "h" } else if isEye || ch == "n" { ch = "b" }
+                } else if isEye {
+                    let odd = ch == "3" || ch == "4"
+                    ch = glasses && style != .closed ? lens(norm[x], norm, x)
+                        : eyeChar(norm[x], norm, x, style, inner: CGFloat(x) + 0.5 < center ? 1 : -1)
+                    if odd, ch == "K", [.open, .openAway, .sad, .angry].contains(style) { ch = "R" }
                 }
                 g[top + r][x] = ch
             }
         }
         if blush, pose != .back {
             let y = top + eyeRow + 2
-            let eyeXs = rows[eyeRow].indices.filter { rows[eyeRow][$0] == "1" }
+            let eyeXs = rows[eyeRow].indices.filter { "13".contains(rows[eyeRow][$0]) }
             if let l = eyeXs.min(), let r = eyeXs.max(), (0..<n).contains(y) {
                 for x in [l - 1, r + 1] where (0..<n).contains(x) && g[y][x] != "." && g[y][x] != "o" { g[y][x] = "P" }
             }
@@ -110,7 +117,7 @@ final class SpriteSheet {
         if glasses, pose != .back, pose != .sleep {
             // bridge between the lenses
             let y = top + eyeRow
-            let eyeXs = rows[eyeRow].indices.filter { rows[eyeRow][$0] == "1" }
+            let eyeXs = rows[eyeRow].indices.filter { "13".contains(rows[eyeRow][$0]) }
             if let l = eyeXs.min(), let r = eyeXs.max() {
                 for x in max(0, l - 1)...min(n - 1, r + 1) where g[y][x] != "G" && g[y][x] != "g" && g[y][x] != "." { g[y][x] = "G" }
             }

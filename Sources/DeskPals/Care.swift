@@ -81,7 +81,7 @@ final class Needs {
 // MARK: - Food and toys
 
 enum Food: String, CaseIterable {
-    case fish, berry, cookie, pepper
+    case fish, berry, cookie, pepper, coffee, taiyaki, cherry
 
     var title: String { rawValue.capitalized }
 
@@ -100,6 +100,15 @@ enum Food: String, CaseIterable {
             case .pepper:
                 return Pixels.image(["..g..", ".gg..", ".rrr.", "rrWrr", "rrrrr", ".rrr.", "..rr.", "...r."],
                                     ["r": 0xE53935, "g": 0x4CAF50])
+            case .coffee:
+                return Pixels.image(["..s.s..", "...s.s.", "ooooo..", "offfooo", "oWWWo.o", "oWWWooo", ".ooo..."],
+                                    ["o": 0x5A5A66, "f": 0x6B3E1E, "s": 0xD8D8D8])
+            case .taiyaki:
+                return Pixels.image(["...ooo...o", ".oobbbo.ob", "obKbbbbobb", ".oobbbo.ob", "...ooo...o"],
+                                    ["o": 0x7A4A1E, "b": 0xE0A44E, "K": 0x3A2410])
+            case .cherry:
+                return Pixels.image(["....gg.", "...g.g.", "..g..g.", ".rr.rr.", "rWrrWrr", "rrrrrrr", ".rr.rr."],
+                                    ["r": 0xD6203A, "g": 0x3E8E41])
             }
         }
     }
@@ -347,7 +356,7 @@ private final class PropView: NSView {
 
 // MARK: - Particles
 
-enum ParticleKind { case dust, heart, note, popcorn, crumb, fire, sparkle, sweat }
+enum ParticleKind { case dust, heart, note, popcorn, crumb, fire, sparkle, sweat, tentacle, fist }
 
 struct Particle {
     var pos: CGPoint
@@ -368,6 +377,8 @@ struct Particle {
             case .fire: return Pixels.image([".y.", "yoy", "oro"], ["y": 0xFFE066, "o": 0xFF8A1F, "r": 0xE53935])
             case .sparkle: return Pixels.image([".s.", "sWs", ".s."], ["s": 0xFFD54F])
             case .sweat: return Pixels.image(["b", "b"], ["b": 0x6EC6FF])
+            case .tentacle: return Pixels.image([".r.", "rRr", ".r."], ["r": 0xC8102E, "R": 0xFF4D5E])
+            case .fist: return Pixels.image([".oooo.", "oppppo", "oppppo", ".oooo."], ["o": 0x3A2470, "p": 0x8C6BE0])
             }
         }
     }

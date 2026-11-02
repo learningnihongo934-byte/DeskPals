@@ -8,6 +8,7 @@ enum Keys {
     static let pet = "pet", scale = "scale"
     static let windows = "react.windows", clicks = "react.clicks", typing = "react.typing", idle = "react.idle"
     static let video = "react.video", music = "react.music", battery = "react.battery", dock = "react.dock"
+    static let ledges = "react.ledges"
     static let bubbles = "bubbles", sleepAfter = "sleepAfter", launchedBefore = "launchedBefore"
     static func name(_ id: String) -> String { "name.\(id)" }
     static func accessory(_ id: String) -> String { "accessory.\(id)" }
@@ -39,6 +40,7 @@ final class Senses {
     private var videoSeen = 0.0, videoGone = 0.0
     private var battery: (percent: Int, charging: Bool)?
     private var monitors: [Any] = []
+    private var readingLedges = false
 
     static let videoHelpers = ["helper", "webkit", "gpu", "renderer", "plugin", "video"]
 
@@ -125,6 +127,7 @@ final class Senses {
             pet.musicPlaying = Senses.on(Keys.music) && videoSeen == 0 && Self.audioPlaying()
             if slowTicks % 2 == 0 { checkVideo() }
             if slowTicks % 3 == 0 { refreshDock() }
+            refreshLedges()
             if slowTicks % 10 == 0 { habits() }
             if slowTicks % 30 == 0 { checkBattery() }
         }
@@ -260,6 +263,26 @@ final class Senses {
 
     func refreshDock() {
         world.dock = Senses.on(Keys.dock) ? DockReader.read() : nil
+    }
+
+    /// Text boxes, buttons and toolbars in the app you're using, as extra ledges.
+    func refreshLedges() {
+        guard Senses.on(Keys.ledges), DockReader.trusted,
+              let front = NSWorkspace.shared.frontmostApplication, front.processIdentifier != me,
+              let flipH = NSScreen.screens.first?.frame.height else {
+            world.ledges = nil
+            return
+        }
+        guard !readingLedges else { return }
+        readingLedges = true
+        let pid = front.processIdentifier
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let ledges = Ledges.read(pid: pid, flipH: flipH)
+            DispatchQueue.main.async {
+                self?.world.ledges = ledges
+                self?.readingLedges = false
+            }
+        }
     }
 
     static func batteryState() -> (percent: Int, charging: Bool)? {

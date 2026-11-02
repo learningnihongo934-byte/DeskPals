@@ -9,7 +9,7 @@ final class SettingsModel: ObservableObject {
     static let reactions: [(name: String, key: String)] = [
         ("New windows & apps", Keys.windows), ("Mouse clicks", Keys.clicks), ("Typing", Keys.typing),
         ("Idle & time of day", Keys.idle), ("Videos (watches with you)", Keys.video), ("Music (dances)", Keys.music),
-        ("Battery", Keys.battery), ("Walk on Dock icons", Keys.dock),
+        ("Battery", Keys.battery), ("Walk on Dock icons", Keys.dock), ("Stand on text boxes & buttons", Keys.ledges),
     ]
 
     private let d = UserDefaults.standard
@@ -123,7 +123,7 @@ private struct PetTab: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            HStack(spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 4), spacing: 10) {
                 ForEach(PetKind.all, id: \.id) { k in
                     PetCard(kind: k, selected: model.petID == k.id) { model.petID = k.id }
                 }
@@ -208,15 +208,15 @@ private struct BehaviorTab: View {
                 }
             }
 
-            if model.reacts[Keys.dock] ?? true {
+            if (model.reacts[Keys.dock] ?? true) || (model.reacts[Keys.ledges] ?? true) {
                 TimelineView(.periodic(from: .now, by: 2)) { _ in
-                    LabeledContent("Dock") {
+                    LabeledContent("Access") {
                         if DockReader.trusted {
-                            Text("✓ \(model.displayName) can see your Dock icons").foregroundStyle(.secondary)
+                            Text("✓ \(model.displayName) can see your Dock and things to stand on").foregroundStyle(.secondary)
                         } else {
                             HStack {
-                                Button("Allow Dock access…") { DockReader.requestAccess() }
-                                Text("Accessibility, only to find where the icons are").font(.caption).foregroundStyle(.secondary)
+                                Button("Allow access…") { DockReader.requestAccess() }
+                                Text("Accessibility, only to find where Dock icons and buttons are").font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
