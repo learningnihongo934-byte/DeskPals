@@ -24,11 +24,16 @@ very happy, and fight back when they're startled or thrown. A glowing pixel aura
 - Fire breath, tentacles, punch barrages and spin kicks, bigger than usual
 - **Vanish**: fades away in a cold aura and turns up right behind someone
 - **Heal**: runs to anyone who got knocked around or is dizzy and patches them up (healers come running after fights)
+- **Party**: puts on headphones and gets every pet dancing
+- **Cheer**: a big cheer that lifts everyone's mood
 
 Custom pets can also have a **rival**. When both are on screen they face off menacingly, clash barrages,
 duel in stopped time (anyone who can stop time can move in it), drop enormous things on each other,
 strike dramatic poses, sit back to back in a sulky truce, and bicker over popcorn while watching videos.
 With `"rivalStyle": "chase"` it's a pursuit instead: one hunts, the other always slips away and reappears behind them.
+
+Or a **bestie** instead: best friends sit together, hug, dance, share their favorite food, give piggyback rides
+and cuddle up while watching videos.
 
 ## Places, worlds and weather
 
@@ -133,9 +138,10 @@ Put a JSON file in `~/Library/Application Support/DeskPals/Pets/` and restart De
 - Art uses the same letters as the built-in pets (see `Pets.swift`): `1`/`2` mark the eyes, `3`/`4` an eye drawn in the `R` colour, `n` the mouth.
 - Optional: `mirrored`, `walkSpeed`, `jumpiness`, `curiosity`, `sleepiness`, `clickStyle` (`chase`/`startle`), `gravity`, `hops`,
   `bounciness`, `zoomy`, `climbs`, `clingy`, `trait`, `backHair` (art rows shown as hair from behind).
-- `special`: `fire`, `tentacles`, `spinKick` or `barrage`. `favorite`: fish, berry, cookie, pepper, coffee, taiyaki or cherry.
-- Power moves: `power` (`timeStop`, `transform`, `auraKick`, `vanish`, `heal`, or any special), `aura` (hex colour), `auraText` (glyphs that float
+- `special`: `fire`, `tentacles`, `spinKick` or `barrage`. `favorite`: fish, berry, cookie, pepper, coffee, taiyaki, cherry or matcha.
+- Power moves: `power` (`timeStop`, `transform`, `auraKick`, `vanish`, `heal`, `party`, `cheer`, or any special), `aura` (hex colour), `auraText` (glyphs that float
   around it), `powerShout`, and for `transform`: `transformArt`, `transformPalette`, `transformScale`. `startsGrown` skips the baby stage.
+- Friends: `bestie` (another pet's id) and `bestieLines`.
 - Rivals: `rival` (another pet's id), `rivalStyle` (`fight` or `chase`), `rivalLines`, `winLines`, `loseLines`, `watchLines`, `projectile` (`knife`),
   and `dropArt` / `dropPalette` / `dropShout` for something enormous to drop on them.
 - `build.sh` also copies any `private-pets/*.json` (git-ignored) into that folder, for pets you keep to yourself.

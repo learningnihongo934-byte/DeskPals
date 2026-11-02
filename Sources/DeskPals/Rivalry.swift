@@ -10,6 +10,7 @@ enum Rivalry {
 
     /// Called a couple of times a second with every pet on screen.
     static func tick(_ pets: [Pet], clock: Double) {
+        bestieTick(pets, clock: clock)
         for a in pets {
             guard let rid = a.kind.rival, let b = pets.first(where: { $0 !== a && $0.kind.id == rid }) else { continue }
             if a.kind.rivalStyle == "chase" || b.kind.rivalStyle == "chase" {
@@ -39,6 +40,109 @@ enum Rivalry {
                 }
             }
         }
+    }
+
+    // MARK: - Besties
+
+    private static func bestieTick(_ pets: [Pet], clock: Double) {
+        for a in pets {
+            guard let bid = a.kind.bestie, let b = pets.first(where: { $0 !== a && $0.kind.id == bid }), a.headID < b.headID || b.kind.bestie != a.kind.id
+            else { continue }
+            let key = "bestie-\(min(a.headID, b.headID))-\(max(a.headID, b.headID))"
+            if next[key] == nil { next[key] = clock + .random(in: 6...15) }
+            guard clock > next[key]! else { continue }
+            if a.isWatching, b.isWatching {
+                next[key] = clock + .random(in: 25...50)
+                cuddleWatching(a, b)
+                continue
+            }
+            guard a.isCalm, b.isCalm else { continue }
+            next[key] = clock + .random(in: 30...70)
+            switch Int.random(in: 0..<5) {
+            case 0: hangOut(a, b, hug: false)
+            case 1: hangOut(a, b, hug: true)
+            case 2: danceTogether(a, b)
+            case 3: shareFood(a, b)
+            default: piggyback(a, b)
+            }
+        }
+    }
+
+    /// Walk over and sit together (or hug).
+    static func hangOut(_ a: Pet, _ b: Pet, hug: Bool) {
+        a.say(a.kind.bestieLines.randomElement() ?? "hi!", 1.8)
+        let side: CGFloat = a.pos.x < b.pos.x ? -1 : 1
+        let arrive = { [weak a, weak b] in
+            guard let a, let b else { return }
+            a.facingRight = b.pos.x > a.pos.x
+            b.facingRight = a.pos.x > b.pos.x
+            if hug {
+                for p in [a, b] {
+                    p.loveUntil = p.t + 2.5
+                    p.blushUntil = p.t + 3
+                    p.emit(.heart, at: p.head, count: 3, vx: -40...40, vy: 60...110, gravity: 0, life: 1...1.4)
+                }
+                a.squash = 0.5
+                b.squash = 0.5
+                b.say(b.kind.bestieLines.randomElement() ?? "♥", 1.8)
+                a.sitDown(4)
+                b.sitDown(4)
+            } else {
+                a.sitDown(10)
+                b.sitDown(10)
+                b.after(1.2) { b.say(b.kind.bestieLines.randomElement() ?? "♪", 1.8) }
+            }
+        }
+        let x = b.pos.x + side * b.size * (hug ? 0.55 : 0.95)
+        if a.standingOn == b.standingOn, let seg = a.currentSegment() {
+            a.walk(to: clamp(x, seg.lowerBound + a.size / 2, seg.upperBound - a.size / 2), run: false, then: arrive)
+        } else {
+            a.jump(to: CGPoint(x: x, y: b.pos.y), then: arrive)
+        }
+        b.hold(5)
+    }
+
+    static func danceTogether(_ a: Pet, _ b: Pet) {
+        a.say("♪", 1.5)
+        b.say("♪♪", 1.5)
+        a.state = .dance(until: a.t + 5)
+        b.state = .dance(until: b.t + 5)
+        a.emit(.note, at: a.head, count: 3, vx: -50...50, vy: 50...100, gravity: 0, life: 1.2...1.6)
+    }
+
+    /// One drops some food for the other: their favorite.
+    static func shareFood(_ a: Pet, _ b: Pet) {
+        a.say(["here, for you!", "let's eat!", "I saved you some"].randomElement()!, 2)
+        let x = b.pos.x + (a.pos.x < b.pos.x ? -1 : 1) * b.size * 0.8
+        a.props.add(.food(b.kind.favorite), at: CGPoint(x: x, y: b.pos.y + b.size * 2.5), vel: CGVector(dx: 0, dy: 100))
+        b.after(1.5) { [weak b] in b?.say("thank you!", 1.5) }
+    }
+
+    static func piggyback(_ a: Pet, _ b: Pet) {
+        guard let head = b.headPlatform else { return }
+        a.say(["piggyback!", "carry me!"].randomElement()!, 1.6)
+        b.hold(6)
+        a.jump(to: CGPoint(x: b.pos.x, y: head.y)) { [weak a, weak b] in
+            guard let a, let b else { return }
+            a.happyUntil = a.t + 3
+            a.sitDown(6)
+            b.say("hup!", 1.2)
+            b.after(0.8) { [weak b] in
+                guard let b, let seg = b.currentSegment() else { return }
+                b.walk(to: clamp(b.pos.x + .random(in: -300...300), seg.lowerBound + b.size / 2, seg.upperBound - b.size / 2), run: false)
+            }
+        }
+    }
+
+    /// In the cinema seats: leaning on each other and sharing popcorn.
+    static func cuddleWatching(_ a: Pet, _ b: Pet) {
+        for p in [a, b] {
+            p.loveUntil = p.t + 2
+            p.emit(.heart, at: p.head, count: 1, vy: 40...80, gravity: 0, life: 1...1.3)
+        }
+        a.say(a.kind.bestieLines.randomElement() ?? "♥", 2)
+        a.emit(.popcorn, at: CGPoint(x: a.pos.x, y: a.pos.y + a.size * 0.4), count: 3, vx: (a.pos.x < b.pos.x ? 40 : -140)...(a.pos.x < b.pos.x ? 140 : -40),
+               vy: 100...200, gravity: 500, life: 0.5...0.8)
     }
 
     // MARK: - Chase rivals

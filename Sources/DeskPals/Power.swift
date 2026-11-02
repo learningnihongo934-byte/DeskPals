@@ -163,6 +163,41 @@ extension Pet {
             } else {
                 jump(to: spot, then: treat)
             }
+        case .party:
+            // headphones on: everyone dances
+            say(shout ?? "♪♪♪", 2.5)
+            Sound.shared.play(.chime, pitch: 1.2)
+            FX.shared.ring(at: center, color: auraColor, radius: 400, duration: 0.9)
+            state = .dance(until: t + 7)
+            for f in friends() where f !== self && f.isCalm {
+                f.after(.random(in: 0.2...0.8)) { [weak f] in
+                    guard let f, f.isCalm else { return }
+                    f.state = .dance(until: f.t + 6)
+                    f.say(["♪", "♪♪", "yay!"].randomElement()!, 1.5)
+                }
+            }
+            for i in 0..<10 {
+                after(Double(i) * 0.6) { [weak self] in
+                    guard let self else { return }
+                    self.emit(.note, at: self.head, count: 2, vx: -60...60, vy: 50...110, gravity: 0, life: 1.2...1.8)
+                }
+            }
+        case .cheer:
+            // a big cheer that lifts everyone's mood
+            say(shout ?? "you can do it!", 2.2)
+            Sound.shared.play(.ding, pitch: 1.2)
+            FX.shared.ring(at: center, color: auraColor, radius: 300, duration: 0.6)
+            emit(.sparkle, at: head, count: 10, vx: -120...120, vy: 60...200, gravity: 150)
+            launch(CGVector(dx: 0, dy: 700))
+            for f in friends() where f !== self {
+                f.needs.happiness = min(1, f.needs.happiness + 0.12)
+                f.after(.random(in: 0.3...0.9)) { [weak f] in
+                    guard let f, f.isCalm else { return }
+                    f.happyUntil = f.t + 2
+                    f.emit(.heart, at: f.head, count: 1, vy: 50...90, gravity: 0, life: 0.9...1.2)
+                    f.launch(CGVector(dx: 0, dy: 420))
+                }
+            }
         case .none:
             hold(0.5)
         }

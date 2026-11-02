@@ -107,6 +107,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case "power": self.selected?.pet.powerMove()
                 case let cmd where cmd.hasPrefix("power:"):
                     self.slots.first { $0.uid == String(cmd.dropFirst(6)) }?.pet.powerMove()
+                case let cmd where cmd.hasPrefix("bestie:"):
+                    let ps = self.pets
+                    if let a = ps.first(where: { $0.kind.bestie != nil }), let b = ps.first(where: { $0.kind.id == a.kind.bestie }) {
+                        switch cmd.dropFirst(7) {
+                        case "hug": Rivalry.hangOut(a, b, hug: true)
+                        case "sit": Rivalry.hangOut(a, b, hug: false)
+                        case "dance": Rivalry.danceTogether(a, b)
+                        case "food": Rivalry.shareFood(a, b)
+                        default: Rivalry.piggyback(a, b)
+                        }
+                    }
                 case "chase":
                     let ps = self.pets
                     if let prey = ps.first(where: { $0.kind.power == .vanish }), let hunter = ps.first(where: { $0.kind.id == prey.kind.rival }) {

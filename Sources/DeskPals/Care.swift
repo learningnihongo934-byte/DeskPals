@@ -91,7 +91,7 @@ final class Needs {
 // MARK: - Food and toys
 
 enum Food: String, CaseIterable {
-    case fish, berry, cookie, pepper, coffee, taiyaki, cherry
+    case fish, berry, cookie, pepper, coffee, taiyaki, cherry, matcha
 
     var title: String { rawValue.capitalized }
 
@@ -116,6 +116,9 @@ enum Food: String, CaseIterable {
             case .taiyaki:
                 return Pixels.image(["...ooo...o", ".oobbbo.ob", "obKbbbbobb", ".oobbbo.ob", "...ooo...o"],
                                     ["o": 0x7A4A1E, "b": 0xE0A44E, "K": 0x3A2410])
+            case .matcha:
+                return Pixels.image(["..s.s..", "...s.s.", "ooooo..", "ogggooo", "oWWWo.o", "oWWWooo", ".ooo..."],
+                                    ["o": 0x4E6B3A, "g": 0x8CC63F, "s": 0xD8D8D8])
             case .cherry:
                 return Pixels.image(["....gg.", "...g.g.", "..g..g.", ".rr.rr.", "rWrrWrr", "rrrrrrr", ".rr.rr."],
                                     ["r": 0xD6203A, "g": 0x3E8E41])

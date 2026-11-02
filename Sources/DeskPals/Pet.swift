@@ -667,7 +667,7 @@ final class Pet {
     func specialMove() {
         switch kind.special {
         case .none: break
-        case .timeStop, .transform, .auraKick, .vanish, .heal: powerMove()
+        case .timeStop, .transform, .auraKick, .vanish, .heal, .party, .cheer: powerMove()
         case .fire:
             puffFire()
             hold(1.5)
