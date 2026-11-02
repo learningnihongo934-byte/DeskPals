@@ -30,7 +30,7 @@ final class PetWindow: NSPanel {
     var margin: CGFloat { pet.size * 0.7 + 10 }
 
     func sync() {
-        let w = max(pet.size * 3.4, 340), h = pet.size * 2.4 + 110
+        let w = max(pet.size * 3.4, 340), h = pet.size * 2.4 + 160 + pet.bubbleOffset
         let shake = FX.shared.shakeOffset
         let origin = CGPoint(x: (pet.pos.x - w / 2 + shake.x).rounded(), y: (pet.pos.y - margin + shake.y).rounded())
         setFrame(CGRect(origin: origin, size: CGSize(width: w, height: h)), display: false)
@@ -114,7 +114,7 @@ final class PetView: NSView {
         ctx.setAlpha(1)
 
         if !l.hidden, let text = pet.bubble, Senses.on(Keys.bubbles) {
-            drawBubble(text, at: feet.y + s * l.sy + l.lift * px + (pet.accessory.art == nil ? 4 : 4 + 4 * px))
+            drawBubble(text, at: feet.y + s * l.sy + l.lift * px + (pet.accessory.art == nil ? 4 : 4 + 4 * px) + pet.bubbleOffset)
         }
     }
 
@@ -145,20 +145,54 @@ final class PetView: NSView {
                                        ["r": 0x3FA9F5, "o": 0x444444])
 
     private func drawBubble(_ text: String, at y: CGFloat) {
-        let size = max(11, 3.2 * pet.scale)
-        var font = NSFont.systemFont(ofSize: size, weight: .heavy)
-        if let d = font.fontDescriptor.withDesign(.rounded) { font = NSFont(descriptor: d, size: size) ?? font }
-        let ink = NSColor(white: 0.12, alpha: 1)
-        let str = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: ink])
-        let ts = str.size()
-        let pad: CGFloat = 6
-        let r = CGRect(x: feet.x - ts.width / 2 - pad, y: y, width: ts.width + pad * 2, height: ts.height + 4)
-        let path = NSBezierPath(roundedRect: r, xRadius: r.height / 2, yRadius: r.height / 2)
+        let (str, size) = Bubble.layout(text, scale: pet.scale)
+        let r = CGRect(x: feet.x - size.width / 2, y: y, width: size.width, height: size.height)
+        let radius = min(r.height / 2, 11)
+        let path = NSBezierPath(roundedRect: r, xRadius: radius, yRadius: radius)
         NSColor.white.setFill()
         path.fill()
-        ink.setStroke()
+        Bubble.ink.setStroke()
         path.lineWidth = 1.5
         path.stroke()
-        str.draw(at: CGPoint(x: r.minX + pad, y: r.minY + 2))
+        str.draw(with: r.insetBy(dx: Bubble.pad, dy: 2), options: [.usesLineFragmentOrigin, .usesFontLeading])
+    }
+}
+
+/// Speech bubbles: long lines wrap, and bubbles of pets close together stack instead of overlapping.
+enum Bubble {
+    static let maxWidth: CGFloat = 200
+    static let pad: CGFloat = 6
+    static let ink = NSColor(white: 0.12, alpha: 1)
+
+    static func layout(_ text: String, scale: CGFloat) -> (NSAttributedString, CGSize) {
+        let pt = max(11, 3.2 * scale)
+        var font = NSFont.systemFont(ofSize: pt, weight: .heavy)
+        if let d = font.fontDescriptor.withDesign(.rounded) { font = NSFont(descriptor: d, size: pt) ?? font }
+        let para = NSMutableParagraphStyle()
+        para.alignment = .center
+        para.lineBreakMode = .byWordWrapping
+        let str = NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: ink, .paragraphStyle: para])
+        let r = str.boundingRect(with: CGSize(width: maxWidth, height: 1000), options: [.usesLineFragmentOrigin, .usesFontLeading])
+        return (str, CGSize(width: ceil(r.width) + pad * 2, height: ceil(r.height) + 4))
+    }
+
+    /// Called every frame: nudges bubbles upward until none of them overlap.
+    static func stack(_ pets: [Pet]) {
+        let talking = pets.compactMap { p -> (Pet, CGRect)? in
+            guard let text = p.bubble else {
+                p.bubbleOffset *= 0.8
+                return nil
+            }
+            let size = layout(text, scale: p.scale).1
+            let y = p.pos.y + p.size + 4 + (p.accessory.art == nil ? 0 : 4 * p.scale)
+            return (p, CGRect(x: p.pos.x - size.width / 2, y: y, width: size.width, height: size.height))
+        }.sorted { ($0.1.minY, $0.1.minX) < ($1.1.minY, $1.1.minX) }
+        var placed: [CGRect] = []
+        for (p, base) in talking {
+            var r = base
+            while let hit = placed.first(where: { $0.insetBy(dx: -4, dy: -3).intersects(r) }) { r.origin.y = hit.maxY + 4 }
+            placed.append(r)
+            p.bubbleOffset += (r.minY - base.minY - p.bubbleOffset) * 0.35
+        }
     }
 }

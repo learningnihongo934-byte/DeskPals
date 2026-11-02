@@ -153,6 +153,7 @@ final class Pet {
     var nextWatchReact = 0.0
     var partyMood = "calm"
     var partyUntil = 0.0
+    var bubbleOffset: CGFloat = 0   // pushed up so it doesn't cover a neighbour's bubble
     var nextPopcorn = 0.0
     var watchDeclinedUntil = 0.0
 

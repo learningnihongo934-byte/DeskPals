@@ -63,11 +63,13 @@ final class WatchParty {
         guard #available(macOS 14.0, *) else { status = "Needs macOS 14 or later"; return }
         busy = true
         let cast = watchers.map { Cast(pet: $0) }
-        let prompt = makePrompt(cast)
+        let said = history
         let model = self.model
         Task { [weak self] in
             guard let self else { return }
-            let jpeg = await Self.snapshot(windowID: video.id)
+            let shot = await Self.snapshot(windowID: video.id)
+            let jpeg = shot?.jpeg
+            let prompt = Self.makePrompt(cast, title: shot?.title, said: said)
             let reply = jpeg == nil ? nil : await self.ask(model: model, prompt: prompt, jpeg: jpeg!)
             DispatchQueue.main.async {
                 self.busy = false
@@ -85,7 +87,7 @@ final class WatchParty {
 
     private struct Cast {
         let id: String, name: String, species: String, trait: String, samples: [String]
-        let rival: String?, bestie: String?
+        let rival: String?, bestie: String?, series: String?
         init(pet: Pet) {
             id = pet.kind.id
             name = pet.name
@@ -94,18 +96,29 @@ final class WatchParty {
             samples = Array(pet.kind.lines.shuffled().prefix(6))
             rival = pet.kind.rival
             bestie = pet.kind.bestie
+            series = pet.kind.series
         }
     }
 
-    private func makePrompt(_ cast: [Cast]) -> String {
+    private static func makePrompt(_ cast: [Cast], title: String?, said history: [String]) -> String {
         var p = "You voice a watch party of tiny pixel desktop pets watching a video together with their human.\nCharacters:\n"
         for c in cast {
-            p += "- id \"\(c.id)\": \(c.name), a \(c.species). \(c.trait). Talks like: \(c.samples.joined(separator: " | "))\n"
+            let from = c.series.map { " from \($0)" } ?? ""
+            p += "- id \"\(c.id)\": \(c.name), a \(c.species)\(from). \(c.trait). Talks like: \(c.samples.joined(separator: " | "))\n"
         }
         let ids = Set(cast.map(\.id))
         for c in cast {
             if let r = c.rival, ids.contains(r), c.id < r { p += "\(c.name) and \(cast.first { $0.id == r }!.name) are rivals and bicker.\n" }
             if let b = c.bestie, ids.contains(b), c.id < b { p += "\(c.name) and \(cast.first { $0.id == b }!.name) are best friends.\n" }
+        }
+        if let title, !title.isEmpty { p += "The video window's title is: \"\(title)\"\n" }
+        if cast.contains(where: { $0.series != nil }) {
+            p += """
+            If the video is from a character's own show (check the title, the characters and the art style), that \
+            character recognises it and reacts to seeing themselves, their friends or their own story, like "wait… that's me!". \
+            The others can tease them about it. Don't claim it's their show unless it clearly is.
+
+            """
         }
         if !history.isEmpty { p += "What they said a moment ago:\n" + history.joined(separator: "\n") + "\n" }
         p += """
@@ -163,7 +176,7 @@ final class WatchParty {
 
     /// Just the video window's own pixels (not the pets on top, not other windows), about 640px wide.
     @available(macOS 14.0, *)
-    private static func snapshot(windowID: Int) async -> Data? {
+    private static func snapshot(windowID: Int) async -> (jpeg: Data, title: String?)? {
         do {
             let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: true)
             guard let win = content.windows.first(where: { $0.windowID == CGWindowID(windowID) }) else { return nil }
@@ -174,7 +187,8 @@ final class WatchParty {
             cfg.height = max(64, Int(win.frame.height * scale))
             cfg.showsCursor = false
             let img = try await SCScreenshotManager.captureImage(contentFilter: filter, configuration: cfg)
-            return NSBitmapImageRep(cgImage: img).representation(using: .jpeg, properties: [.compressionFactor: 0.7])
+            guard let jpeg = NSBitmapImageRep(cgImage: img).representation(using: .jpeg, properties: [.compressionFactor: 0.7]) else { return nil }
+            return (jpeg, win.title)
         } catch {
             NSLog("DeskPals: watch party snapshot failed: \(error)")
             return nil

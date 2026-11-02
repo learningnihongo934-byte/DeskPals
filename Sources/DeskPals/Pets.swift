@@ -41,6 +41,7 @@ struct PetKind {
     /// The big move from double-clicking or "Power up!" (defaults to its special).
     var power: Special? = nil
     var noAura = false        // no charge-up or aura (characters without superpowers)
+    var series: String? = nil   // the show or story a character is from, so it recognises itself
     var aura: UInt32? = nil
     /// Glyphs that float around it while powered up.
     var auraText: String? = nil

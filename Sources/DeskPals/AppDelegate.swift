@@ -254,6 +254,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         FX.shared.tick(dt)
         props.tick(dt)
+        Bubble.stack(pets)
         slots.forEach { $0.window.sync() }
         socialClock += dt
         if socialClock > 0.5 {

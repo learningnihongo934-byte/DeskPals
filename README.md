@@ -104,6 +104,7 @@ Turn on **Watch party** (menu bar, or Settings → Watch party) and your pets re
 Every few seconds a small vision model running on your Mac through [Ollama](https://ollama.com) looks at a snapshot of
 just the video window and writes an in-character line and mood for each pet. They turn around to face you, react,
 and answer each other. Snapshots never leave your Mac and are never saved.
+Characters with a `series` (the show they're from) recognise themselves when you watch their show, helped by the video window's title.
 
 Needs Ollama with a model that can see images (default `qwen3.5:4b`; about 1.5 s per reaction on an M-series Mac)
 and Screen Recording permission.
@@ -152,6 +153,7 @@ Put a JSON file in `~/Library/Application Support/DeskPals/Pets/` and restart De
 - `special`: `fire`, `tentacles`, `spinKick` or `barrage`. `favorite`: fish, berry, cookie, pepper, coffee, taiyaki, cherry or matcha.
 - Power moves: `power` (`timeStop`, `transform`, `auraKick`, `vanish`, `heal`, `party`, `cheer`, `experiment`, or any special), `aura` (hex colour), `auraText` (glyphs that float
 - `noAura: true` for characters without superpowers: their move happens right away, with no charge-up, aura or rings.
+- `series`: the show or story the character is from, so the watch party knows when they're watching themselves.
   around it), `powerShout`, and for `transform`: `transformArt`, `transformPalette`, `transformScale`. `startsGrown` skips the baby stage.
 - Friends: `bestie` (another pet's id) and `bestieLines`.
 - Progression: `progression` (a list of discoveries made one every `progressInterval` seconds, saved across launches),
