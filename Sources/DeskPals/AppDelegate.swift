@@ -107,6 +107,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case "power": self.selected?.pet.powerMove()
                 case let cmd where cmd.hasPrefix("power:"):
                     self.slots.first { $0.uid == String(cmd.dropFirst(6)) }?.pet.powerMove()
+                case "chase":
+                    let ps = self.pets
+                    if let prey = ps.first(where: { $0.kind.power == .vanish }), let hunter = ps.first(where: { $0.kind.id == prey.kind.rival }) {
+                        Rivalry.chase(hunter, prey)
+                    }
                 case let cmd where cmd.hasPrefix("rival:"):
                     let ps = self.pets
                     if let a = ps.first(where: { $0.kind.rival != nil && $0.kind.dropArt != nil }) ?? ps.first(where: { $0.kind.rival != nil }), let b = ps.first(where: { $0.kind.id == a.kind.rival }) {
@@ -115,6 +120,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                         case "duel": Rivalry.faceOff(a, b) { Rivalry.timeStopDuel(a, b) }
                         case "drop": Rivalry.faceOff(a, b) { Rivalry.dropOn(a, b) }
                         case "pose": Rivalry.faceOff(a, b) { Rivalry.strikePoses(a, b) }
+                        case "chase": Rivalry.chase(a.kind.power == .vanish ? b : a, a.kind.power == .vanish ? a : b)
                         default: Rivalry.truce(a, b)
                         }
                     }

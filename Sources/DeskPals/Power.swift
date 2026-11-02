@@ -23,7 +23,7 @@ extension Pet {
         guard t > powerCooldown, !isDragged, !isHidden, isGrounded else { return false }
         if case .powerUp = state { return false }
         if move == .transform, isTransformed { return false }
-        powerCooldown = t + 15
+        powerCooldown = t + (move == .heal ? 5 : 15)
         state = .powerUp(until: t + 1.3, move: move)
         say(kind.auraText != nil ? "…" : "hnnngh…", 1.3)
         Sound.shared.play(.chime, pitch: 0.7)
@@ -128,6 +128,41 @@ extension Pet {
             FX.shared.ring(at: center, color: auraColor, radius: 160, duration: 0.45)
             if let shout { say(shout, 1.6) }
             specialMove()
+        case .vanish:
+            say(shout ?? "…", 1.4)
+            emit(.flame, at: center, count: 14, spread: size * 0.4, vx: -40...40, vy: 40...140, gravity: -20, life: 0.5...1.0, color: auraColor)
+            Sound.shared.play(.whoosh, pitch: 0.6)
+            if vanishTarget == nil {
+                let others = friends().filter { $0 !== self && !$0.isHidden }
+                vanishTarget = others.first { $0.kind.id == kind.rival } ?? others.randomElement()
+            }
+            state = .hidden(until: t + .random(in: 2...4))
+        case .heal:
+            let others = friends().filter { $0 !== self && !$0.isHidden }
+            let patient = others.filter { $0.hurtUntil > t || $0.isDizzy }.min { abs($0.pos.x - pos.x) < abs($1.pos.x - pos.x) }
+                ?? others.filter { $0.needs.happiness < 0.35 }.randomElement()
+            guard let patient else {
+                say(kind.phrases.randomElement() ?? "everyone's fine.", 1.6)
+                hold(1)
+                return
+            }
+            say(shout ?? "hold still!", 1.4)
+            let side: CGFloat = patient.pos.x > pos.x ? -1 : 1
+            let spot = CGPoint(x: patient.pos.x + side * patient.size * 0.9, y: patient.pos.y)
+            let treat = { [weak self, weak patient] in
+                guard let self, let patient else { return }
+                self.facingRight = patient.pos.x > self.pos.x
+                self.sitDown(2.5)
+                self.emit(.heal, at: CGPoint(x: patient.pos.x, y: patient.pos.y + patient.size * 0.6), count: 8, spread: patient.size * 0.3,
+                          vx: -40...40, vy: 40...110, gravity: 0, life: 0.8...1.3)
+                Sound.shared.play(.chime, pitch: 1.3)
+                patient.healed()
+            }
+            if patient.standingOn == standingOn, let seg = currentSegment() {
+                walk(to: clamp(spot.x, seg.lowerBound + size / 2, seg.upperBound - size / 2), run: true, then: treat)
+            } else {
+                jump(to: spot, then: treat)
+            }
         case .none:
             hold(0.5)
         }
@@ -174,5 +209,21 @@ extension Pet {
         say(["!!", "ow!", "whoa!", "!?"].randomElement()!, 1)
         launch(CGVector(dx: dir * 700, dy: 600), thrown: true)
         spinVel = -dir * 10
+        hurtUntil = t + 10
+        // healers come running
+        for f in friends() where f !== self && f.kind.power == .heal {
+            f.after(.random(in: 1.5...2.5)) { [weak f] in f?.powerMove() }
+        }
+    }
+
+    var isDizzy: Bool { if case .dizzy = state { return true }; return false }
+
+    /// Patched up by a healer.
+    func healed() {
+        hurtUntil = 0
+        needs.happiness = min(1, needs.happiness + 0.15)
+        if isDizzy { hold(0.5) }
+        emit(.heart, at: head, count: 2, vy: 50...100, gravity: 0, life: 0.9...1.2)
+        after(0.8) { [weak self] in self?.say(["thanks…", "♥", "all better!"].randomElement()!, 1.5) }
     }
 }

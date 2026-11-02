@@ -12,6 +12,10 @@ enum Rivalry {
     static func tick(_ pets: [Pet], clock: Double) {
         for a in pets {
             guard let rid = a.kind.rival, let b = pets.first(where: { $0 !== a && $0.kind.id == rid }) else { continue }
+            if a.kind.rivalStyle == "chase" || b.kind.rivalStyle == "chase" {
+                chaseTick(a, b, clock: clock)
+                continue
+            }
             let key = "\(a.headID)-\(b.headID)"
             if next[key] == nil { next[key] = clock + .random(in: 8...20) }
             guard clock > next[key]! else { continue }
@@ -34,6 +38,50 @@ enum Rivalry {
                     truce(a, b)
                 }
             }
+        }
+    }
+
+    // MARK: - Chase rivals
+
+    /// One hunts the other; the other is always one step ahead, and turns up right behind them.
+    private static func chaseTick(_ a: Pet, _ b: Pet, clock: Double) {
+        let (hunter, prey) = a.kind.power == .vanish ? (b, a) : (a, b)
+        let key = "chase-\(min(a.headID, b.headID))-\(max(a.headID, b.headID))"
+        if next[key] == nil { next[key] = clock + .random(in: 8...20) }
+        guard clock > next[key]! else { return }
+        if hunter.isWatching, prey.isWatching {
+            next[key] = clock + .random(in: 20...40)
+            bicker(prey, hunter)
+            return
+        }
+        guard hunter.isCalm, prey.isCalm else { return }
+        next[key] = clock + .random(in: 30...70) * (1.4 - Pet.chaos)
+        let roll = Double.random(in: 0..<1)
+        if roll < 0.5 {
+            chase(hunter, prey)
+        } else if roll < 0.75 {
+            faceOff(hunter, prey) { prey.say(prey.kind.winLines.randomElement() ?? "…", 2) }
+        } else {
+            prey.vanishTarget = hunter
+            prey.powerCooldown = 0
+            prey.powerMove()
+        }
+    }
+
+    static func chase(_ hunter: Pet, _ prey: Pet) {
+        hunter.say(hunter.kind.rivalLines.randomElement() ?? "!", 1.8)
+        let arrive = { [weak hunter, weak prey] in
+            guard let hunter, let prey, prey.isCalm else { return }
+            prey.vanishTarget = hunter
+            prey.powerCooldown = 0
+            prey.powerMove()
+            hunter.after(1.6) { [weak hunter] in hunter?.say(hunter?.kind.loseLines.randomElement() ?? "gone…", 1.8) }
+        }
+        let x = prey.pos.x + (hunter.pos.x < prey.pos.x ? -1 : 1) * prey.size * 1.3
+        if hunter.standingOn == prey.standingOn, let seg = hunter.currentSegment() {
+            hunter.walk(to: clamp(x, seg.lowerBound + hunter.size / 2, seg.upperBound - hunter.size / 2), run: true, then: arrive)
+        } else {
+            hunter.jump(to: CGPoint(x: x, y: prey.pos.y), then: arrive)
         }
     }
 

@@ -81,6 +81,9 @@ final class Pet {
     var lastStomp = 0.0
     /// Rival face-offs: aura and floating glyphs without a move.
     var menacingUntil = 0.0
+    /// Vanish: who to turn up behind. Heal: when this pet was last hurt.
+    weak var vanishTarget: Pet?
+    var hurtUntil = 0.0
     /// What's drawn: the transformed form while it lasts.
     var drawSheet: SpriteSheet { formSheet ?? sheet }
     var umbrella = false
@@ -664,7 +667,7 @@ final class Pet {
     func specialMove() {
         switch kind.special {
         case .none: break
-        case .timeStop, .transform, .auraKick: powerMove()
+        case .timeStop, .transform, .auraKick, .vanish, .heal: powerMove()
         case .fire:
             puffFire()
             hold(1.5)

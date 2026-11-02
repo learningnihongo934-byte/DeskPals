@@ -75,6 +75,23 @@ extension Pet {
         standingOn = nil
         jumping = false
         airTime = 0
+        if let v = vanishTarget, !v.isHidden {
+            // turn up right behind them
+            vanishTarget = nil
+            pos = CGPoint(x: v.pos.x - v.facing * v.size * 1.1, y: v.pos.y + 2)
+            facingRight = v.pos.x > pos.x
+            vel = .zero
+            state = .air
+            say(kind.rivalLines.randomElement() ?? kind.powerShout ?? "…", 2.2)
+            menacingUntil = t + 2.5
+            v.after(0.5) { [weak v] in
+                guard let v, v.isCalm else { return }
+                v.say("!?", 1.2)
+                v.facingRight.toggle()
+                v.launch(CGVector(dx: 0, dy: 420))
+            }
+            return
+        }
         vel = CGVector(dx: facing * 80, dy: -50)
         state = .air
         say("boo!", 1.5)

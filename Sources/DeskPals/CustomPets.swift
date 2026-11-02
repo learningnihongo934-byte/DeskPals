@@ -52,6 +52,7 @@ enum CustomPets {
         let dropPalette: [String: String]?
         let dropShout: String?
         let startsGrown: Bool?
+        let rivalStyle: String?
     }
 
     static func load() -> [PetKind] {
@@ -103,6 +104,7 @@ enum CustomPets {
         kind.dropPalette = f.dropPalette.map(colors) ?? [:]
         kind.dropShout = f.dropShout
         kind.startsGrown = f.startsGrown ?? false
+        kind.rivalStyle = f.rivalStyle
         return kind
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 enum ClickStyle: String { case chase, startle }
 
 /// A pet's signature move, used when it's startled or showing off.
-enum Special: String { case none, fire, tentacles, spinKick, barrage, timeStop, transform, auraKick }
+enum Special: String { case none, fire, tentacles, spinKick, barrage, timeStop, transform, auraKick, vanish, heal }
 
 /// One kind of pet: its pixel art and its personality.
 ///
@@ -61,6 +61,8 @@ struct PetKind {
     var dropShout: String? = nil
     /// Characters can skip the baby stage.
     var startsGrown = false
+    /// "fight" (default) or "chase": one hunts, the other vanishes and turns up behind them.
+    var rivalStyle: String? = nil
 
     static let builtIn: [PetKind] = [mochi, gloop, ember, pip]
     /// Built-in pets plus any custom pets from ~/Library/Application Support/DeskPals/Pets.

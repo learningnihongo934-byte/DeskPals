@@ -447,7 +447,7 @@ extension PropView {
 
 // MARK: - Particles
 
-enum ParticleKind { case dust, heart, note, popcorn, crumb, fire, sparkle, sweat, tentacle, fist, flame }
+enum ParticleKind { case dust, heart, note, popcorn, crumb, fire, sparkle, sweat, tentacle, fist, flame, heal }
 
 struct Particle {
     var pos: CGPoint
@@ -481,6 +481,7 @@ struct Particle {
             case .sweat: return Pixels.image(["b", "b"], ["b": 0x6EC6FF])
             case .tentacle: return Pixels.image([".r.", "rRr", ".r."], ["r": 0xC8102E, "R": 0xFF4D5E])
             case .flame: return Pixels.image(["c"], ["c": 0xFFFFFF])
+            case .heal: return Pixels.image([".g.", "ggg", ".g."], ["g": 0x5BD68A])
             case .fist: return Pixels.image([".oooo.", "oppppo", "oppppo", ".oooo."], ["o": 0x3A2470, "p": 0x8C6BE0])
             }
         }
