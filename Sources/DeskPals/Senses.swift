@@ -208,11 +208,15 @@ final class Senses {
             videoGone = 0
             videoSeen += 2
             if videoSeen >= 2 {
-                // Everyone gets their own seat, spread along the bottom of the video.
-                let all = pets
-                for (i, p) in all.enumerated() where !p.isWatching {
-                    let seat = all.count == 1 ? 0.8 : 0.2 + 0.72 * (CGFloat(i) + 0.5) / CGFloat(all.count)
-                    _ = p.startWatching(win, seat: seat)
+                // Everyone sits shoulder to shoulder along the bottom of the video,
+                // with rivals and besties right next to each other.
+                let seated = Self.seatingOrder(pets)
+                let widest = seated.map(\.size).max() ?? 64
+                var spacing = widest * 1.02 / max(win.frame.width, 1)
+                if spacing * CGFloat(seated.count - 1) > 0.84 { spacing = 0.84 / CGFloat(max(1, seated.count - 1)) }
+                let start = max(0.08, 0.88 - spacing * CGFloat(seated.count - 1))
+                for (i, p) in seated.enumerated() where !p.isWatching {
+                    _ = p.startWatching(win, seat: start + spacing * CGFloat(i))
                 }
             }
         } else {
@@ -224,6 +228,20 @@ final class Senses {
                 pets.forEach { $0.stopWatching(["that was good!", "the end!", "again?", "*claps*"].randomElement()) }
             }
         }
+    }
+
+    /// Pets in seat order, each rival or bestie placed right after its partner.
+    static func seatingOrder(_ pets: [Pet]) -> [Pet] {
+        var out: [Pet] = []
+        for p in pets where !out.contains(where: { $0 === p }) {
+            out.append(p)
+            let partner = pets.first { q in
+                q !== p && !out.contains(where: { $0 === q }) &&
+                    (q.kind.id == p.kind.rival || q.kind.id == p.kind.bestie || q.kind.rival == p.kind.id || q.kind.bestie == p.kind.id)
+            }
+            if let partner { out.append(partner) }
+        }
+        return out
     }
 
     /// The window of an app that's keeping the display awake (which is what video players do).

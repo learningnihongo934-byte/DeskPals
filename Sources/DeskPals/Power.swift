@@ -24,6 +24,10 @@ extension Pet {
         if case .powerUp = state { return false }
         if move == .transform, isTransformed { return false }
         powerCooldown = t + (move == .heal ? 5 : 15)
+        if kind.noAura {   // no superpowers: just do the thing, no charging up
+            unleash(move)
+            return true
+        }
         state = .powerUp(until: t + 1.3, move: move)
         say(kind.auraText != nil ? "…" : "hnnngh…", 1.3)
         Sound.shared.play(.chime, pitch: 0.7)
@@ -39,6 +43,7 @@ extension Pet {
         if FX.shared.owns(self) { target = max(target, 0.8) }
         if menacingUntil > t { target = max(target, 0.7) }
         if case .pose = state { target = max(target, 0.6) }
+        if kind.noAura { target = 0 }
         aura += (target - aura) * CGFloat(min(1, dt * 6))
 
         if aura > 0.25, Int(t * 30) % 2 == 0 {
@@ -130,7 +135,11 @@ extension Pet {
             specialMove()
         case .vanish:
             say(shout ?? "…", 1.4)
-            emit(.flame, at: center, count: 14, spread: size * 0.4, vx: -40...40, vy: 40...140, gravity: -20, life: 0.5...1.0, color: auraColor)
+            if kind.noAura {
+                emit(.dust, at: center, count: 12, spread: size * 0.4, life: 0.5...0.9)
+            } else {
+                emit(.flame, at: center, count: 14, spread: size * 0.4, vx: -40...40, vy: 40...140, gravity: -20, life: 0.5...1.0, color: auraColor)
+            }
             Sound.shared.play(.whoosh, pitch: 0.6)
             if vanishTarget == nil {
                 let others = friends().filter { $0 !== self && !$0.isHidden }
@@ -142,7 +151,7 @@ extension Pet {
             let patient = others.filter { $0.hurtUntil > t || $0.isDizzy }.min { abs($0.pos.x - pos.x) < abs($1.pos.x - pos.x) }
                 ?? others.filter { $0.needs.happiness < 0.35 }.randomElement()
             guard let patient else {
-                say(kind.phrases.randomElement() ?? "everyone's fine.", 1.6)
+                say(kind.lines.randomElement() ?? "everyone's fine.", 1.6)
                 hold(1)
                 return
             }
@@ -169,7 +178,7 @@ extension Pet {
             // headphones on: everyone dances
             say(shout ?? "♪♪♪", 2.5)
             Sound.shared.play(.chime, pitch: 1.2)
-            FX.shared.ring(at: center, color: auraColor, radius: 400, duration: 0.9)
+            if !kind.noAura { FX.shared.ring(at: center, color: auraColor, radius: 400, duration: 0.9) }
             state = .dance(until: t + 7)
             for f in friends() where f !== self && f.isCalm {
                 f.after(.random(in: 0.2...0.8)) { [weak f] in
@@ -188,7 +197,7 @@ extension Pet {
             // a big cheer that lifts everyone's mood
             say(shout ?? "you can do it!", 2.2)
             Sound.shared.play(.ding, pitch: 1.2)
-            FX.shared.ring(at: center, color: auraColor, radius: 300, duration: 0.6)
+            if !kind.noAura { FX.shared.ring(at: center, color: auraColor, radius: 300, duration: 0.6) }
             emit(.sparkle, at: head, count: 10, vx: -120...120, vy: 60...200, gravity: 150)
             launch(CGVector(dx: 0, dy: 700))
             for f in friends() where f !== self {
@@ -216,14 +225,18 @@ extension Pet {
         let nx = pos.x + dir * kind.walkSpeed * scale * 9 * CGFloat(dt)
         if p.holds(nx) { pos.x = nx }
         let a = -dir * 120, b = -dir * 40
-        emit(.flame, at: CGPoint(x: pos.x - dir * size * 0.4, y: pos.y + size * 0.4), count: 2, spread: size * 0.2,
-             vx: min(a, b)...max(a, b), vy: -20...40, gravity: 0, life: 0.2...0.4, color: auraColor)
+        if kind.noAura {
+            emit(.dust, at: CGPoint(x: pos.x - dir * size * 0.4, y: pos.y), count: 1, spread: size * 0.2, life: 0.25...0.4)
+        } else {
+            emit(.flame, at: CGPoint(x: pos.x - dir * size * 0.4, y: pos.y + size * 0.4), count: 2, spread: size * 0.2,
+                 vx: min(a, b)...max(a, b), vy: -20...40, gravity: 0, life: 0.2...0.4, color: auraColor)
+        }
         FX.shared.speedLines(at: CGPoint(x: pos.x, y: pos.y + size / 2), dir: dir)
         guard t > until else { return }
 
         // The kick.
         let c = CGPoint(x: pos.x + dir * size * 0.6, y: pos.y + size * 0.6)
-        FX.shared.ring(at: c, color: auraColor, radius: 240, duration: 0.5)
+        if !kind.noAura { FX.shared.ring(at: c, color: auraColor, radius: 240, duration: 0.5) }
         FX.shared.flash(at: c, color: 0xFFFFFF, radius: 90)
         FX.shared.shake(1)
         Sound.shared.play(.impact)

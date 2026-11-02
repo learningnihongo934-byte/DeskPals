@@ -605,7 +605,7 @@ final class Pet {
         if r < 0.78 { sneeze(); return }
         if r < 0.81 { state = .stretch(until: t + 1.4); return }
         if r < 0.85, kind.special != .none { specialMove(); return }
-        if r < 0.92 { say(kind.phrases.randomElement()!, 1.6) }
+        if r < 0.92 { say(kind.lines.randomElement()!, 1.6) }
         hold(.random(in: 1.5...4))
     }
 

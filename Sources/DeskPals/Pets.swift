@@ -40,6 +40,7 @@ struct PetKind {
     var shout: String? = nil   // what it yells during its special move
     /// The big move from double-clicking or "Power up!" (defaults to its special).
     var power: Special? = nil
+    var noAura = false        // no charge-up or aura (characters without superpowers)
     var aura: UInt32? = nil
     /// Glyphs that float around it while powered up.
     var auraText: String? = nil

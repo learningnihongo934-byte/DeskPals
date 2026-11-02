@@ -93,7 +93,7 @@ enum Rivalry {
                 b.after(1.2) { b.say(b.kind.bestieLines.randomElement() ?? "♪", 1.8) }
             }
         }
-        let x = b.pos.x + side * b.size * (hug ? 0.55 : 0.95)
+        let x = b.pos.x + side * b.size * (hug ? 0.55 : 0.68)   // right next to each other
         if a.standingOn == b.standingOn, let seg = a.currentSegment() {
             a.walk(to: clamp(x, seg.lowerBound + a.size / 2, seg.upperBound - a.size / 2), run: false, then: arrive)
         } else {
@@ -322,7 +322,7 @@ enum Rivalry {
     static func truce(_ a: Pet, _ b: Pet) {
         guard a.standingOn == b.standingOn else { return }
         let side: CGFloat = a.pos.x < b.pos.x ? -1 : 1
-        a.walk(to: b.pos.x + side * b.size * 0.9, run: false) { [weak a, weak b] in
+        a.walk(to: b.pos.x + side * b.size * 0.68, run: false) { [weak a, weak b] in
             guard let a, let b else { return }
             a.facingRight = side < 0
             b.facingRight = side > 0

@@ -141,6 +141,7 @@ Put a JSON file in `~/Library/Application Support/DeskPals/Pets/` and restart De
   `bounciness`, `zoomy`, `climbs`, `clingy`, `trait`, `backHair` (art rows shown as hair from behind).
 - `special`: `fire`, `tentacles`, `spinKick` or `barrage`. `favorite`: fish, berry, cookie, pepper, coffee, taiyaki, cherry or matcha.
 - Power moves: `power` (`timeStop`, `transform`, `auraKick`, `vanish`, `heal`, `party`, `cheer`, `experiment`, or any special), `aura` (hex colour), `auraText` (glyphs that float
+- `noAura: true` for characters without superpowers: their move happens right away, with no charge-up, aura or rings.
   around it), `powerShout`, and for `transform`: `transformArt`, `transformPalette`, `transformScale`. `startsGrown` skips the baby stage.
 - Friends: `bestie` (another pet's id) and `bestieLines`.
 - Progression: `progression` (a list of discoveries made one every `progressInterval` seconds, saved across launches),

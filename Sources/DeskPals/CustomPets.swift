@@ -36,6 +36,7 @@ enum CustomPets {
         let backHair: [Int]?
         let shout: String?
         let power: String?
+        let noAura: Bool?
         let aura: String?
         let auraText: String?
         let powerShout: String?
@@ -95,6 +96,7 @@ enum CustomPets {
             phrases: f.phrases ?? [f.sound ?? "!"], special: Special(rawValue: f.special ?? "") ?? .none,
             backHair: f.backHair ?? [], shout: f.shout)
         kind.power = f.power.flatMap(Special.init(rawValue:))
+        kind.noAura = f.noAura ?? false
         kind.aura = f.aura.flatMap(hex)
         kind.auraText = f.auraText
         kind.powerShout = f.powerShout
