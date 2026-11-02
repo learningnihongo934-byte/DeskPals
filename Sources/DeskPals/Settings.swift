@@ -338,7 +338,10 @@ private struct WatchPartyTab: View {
                     HStack {
                         Text(on ? WatchParty.shared.status : "Off").foregroundStyle(.secondary)
                         if on, !WatchParty.shared.hasScreenAccess {
-                            Button("Allow screen recording…") { WatchParty.shared.requestScreenAccess() }
+                            Button("Open Screen Recording settings") {
+                                WatchParty.shared.requestScreenAccess()
+                                NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")!)
+                            }
                         }
                         Button("Check again") { WatchParty.shared.model = modelName }
                     }

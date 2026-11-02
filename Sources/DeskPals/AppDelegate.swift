@@ -110,6 +110,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 case "status":
                     for s in self.slots { NSLog("DeskPals pet \(s.uid) \(s.pet.state) pos=\(Int(s.pet.pos.x)),\(Int(s.pet.pos.y)) target=\(s.pet.gameTarget.map { Int($0) } ?? -1) mouse=\(Int(NSEvent.mouseLocation.x)) selected=\(s.uid == self.selected?.uid)") }
                 case "power": self.selected?.pet.powerMove()
+                case "party":
+                    let line = "party on=\(WatchParty.shared.enabled) access=\(WatchParty.shared.hasScreenAccess) status=\(WatchParty.shared.status) video=\(self.senses.currentVideo?.id ?? -1) watching=\(self.pets.filter(\.isWatching).count)\n"
+                    try? line.write(toFile: NSHomeDirectory() + "/Library/Logs/DeskPals-debug.txt", atomically: true, encoding: .utf8)
                 case let cmd where cmd.hasPrefix("power:"):
                     self.slots.first { $0.uid == String(cmd.dropFirst(6)) }?.pet.powerMove()
                 case let cmd where cmd.hasPrefix("bestie:"):
