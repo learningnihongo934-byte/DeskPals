@@ -35,7 +35,10 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 </dict>
 </plist>
 PLIST
-codesign --force --sign - "$APP" >/dev/null
+# Sign with the local "DeskPals Local Signing" certificate if this Mac has one, so macOS keeps
+# permissions (Screen Recording, Accessibility) across rebuilds; otherwise sign ad hoc.
+SIGN_ID=$(security find-certificate -c "DeskPals Local Signing" -Z 2>/dev/null | awk '/SHA-1/ {print $3}')
+codesign --force --sign "${SIGN_ID:--}" "$APP" >/dev/null
 echo "Built $APP"
 
 # Your own pets (git-ignored), installed where the app looks for custom pets.
