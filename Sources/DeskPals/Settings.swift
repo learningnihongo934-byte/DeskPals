@@ -324,7 +324,7 @@ private struct WatchPartyTab: View {
         Form {
             Toggle("Pets react live to what you watch", isOn: $on)
                 .onChange(of: on) { WatchParty.shared.enabled = $0 }
-            TextField("Model", text: $modelName, prompt: Text("qwen3.5:4b"))
+            TextField("Model", text: $modelName, prompt: Text("qwen3.5:2b"))
                 .onSubmit { WatchParty.shared.model = modelName }
             LabeledContent("React every") {
                 HStack {

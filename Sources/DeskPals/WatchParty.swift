@@ -13,7 +13,7 @@ final class WatchParty {
         set { d.set(newValue, forKey: "party.on"); if newValue { checkOllama() } }
     }
     var model: String {
-        get { d.string(forKey: "party.model") ?? "qwen3.5:4b" }
+        get { d.string(forKey: "party.model") ?? "qwen3.5:2b" }
         set { d.set(newValue, forKey: "party.model"); checkOllama() }
     }
     var interval: Double {
@@ -69,7 +69,7 @@ final class WatchParty {
             let shot = await Self.snapshot(windowID: video.id)
             let jpeg = shot?.jpeg
             let prompt = Self.makePrompt(cast, title: shot?.title, said: said)
-            let reply = jpeg == nil ? nil : await self.ask(model: model, prompt: prompt, jpeg: jpeg!)
+            let reply = jpeg == nil ? nil : await self.ask(model: model, prompt: prompt, ids: cast.map(\.id), jpeg: jpeg!)
             DispatchQueue.main.async {
                 self.busy = false
                 guard let reply else {
@@ -129,9 +129,17 @@ final class WatchParty {
         return p
     }
 
-    private func ask(model: String, prompt: String, jpeg: Data) async -> [String: (line: String, mood: String)]? {
+    static let moods = ["calm", "happy", "laugh", "shocked", "scared", "sad", "angry", "love"]
+
+    private func ask(model: String, prompt: String, ids: [String], jpeg: Data) async -> [String: (line: String, mood: String)]? {
+        // Make Ollama return exactly one line and mood for every pet (small models skip some otherwise).
+        let pet: [String: Any] = ["type": "object", "required": ["line", "mood"],
+                                  "properties": ["line": ["type": "string"], "mood": ["type": "string", "enum": Self.moods]]]
+        let unique = Array(Set(ids))
+        let schema: [String: Any] = ["type": "object", "required": unique,
+                                     "properties": Dictionary(uniqueKeysWithValues: unique.map { ($0, pet) })]
         let body: [String: Any] = [
-            "model": model, "stream": false, "think": false, "format": "json", "keep_alive": "3m",
+            "model": model, "stream": false, "think": false, "format": schema, "keep_alive": "3m",
             "messages": [["role": "user", "content": prompt, "images": [jpeg.base64EncodedString()]]],
             "options": ["temperature": 0.9, "num_predict": 200, "num_ctx": 2048],
         ]

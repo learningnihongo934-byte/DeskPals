@@ -106,7 +106,7 @@ just the video window and writes an in-character line and mood for each pet. The
 and answer each other. Snapshots never leave your Mac and are never saved.
 Characters with a `series` (the show they're from) recognise themselves when you watch their show, helped by the video window's title.
 
-Needs Ollama with a model that can see images (default `qwen3.5:4b`; about 1.5 s per reaction on an M-series Mac)
+Needs Ollama with a model that can see images (default `qwen3.5:2b`, about 3 GB of memory; `qwen3.5:4b` writes sharper lines but needs more)
 and Screen Recording permission.
 
 ## Settings
