@@ -23,7 +23,7 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
 <dict>
     <key>CFBundleName</key><string>DeskPals</string>
     <key>CFBundleDisplayName</key><string>DeskPals</string>
-    <key>CFBundleIdentifier</key><string>tech.rennko.deskpals</string>
+    <key>CFBundleIdentifier</key><string>tech.rennko.deskpals.app</string>
     <key>CFBundleExecutable</key><string>DeskPals</string>
     <key>CFBundleIconFile</key><string>AppIcon</string>
     <key>CFBundlePackageType</key><string>APPL</string>

@@ -45,7 +45,7 @@ final class WatchParty {
                 } else if !names.contains(where: { $0 == model || $0 == model + ":latest" }) {
                     self.status = "Model not found: run `ollama pull \(model)`"
                 } else {
-                    self.status = self.hasScreenAccess ? "Ready" : "Needs Screen Recording permission"
+                    self.status = "Ready"
                 }
             }
         }.resume()
@@ -59,7 +59,6 @@ final class WatchParty {
             return
         }
         nextAt = clock + interval
-        guard hasScreenAccess else { status = "Needs Screen Recording permission"; return }
         guard #available(macOS 14.0, *) else { status = "Needs macOS 14 or later"; return }
         busy = true
         let cast = watchers.map { Cast(pet: $0) }
@@ -74,7 +73,7 @@ final class WatchParty {
             DispatchQueue.main.async {
                 self.busy = false
                 guard let reply else {
-                    if jpeg == nil { self.status = "Couldn't see the video window" }
+                    if jpeg == nil { self.status = "Can't see the video: allow DeskPals in Screen Recording" }
                     return
                 }
                 self.status = "Ready"
